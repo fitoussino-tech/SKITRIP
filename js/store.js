@@ -1,6 +1,9 @@
 // Data layer. The screens only talk to `Store`, never to storage directly,
 // so this demo version can be swapped for a Supabase version with the same methods.
 (function () {
+  // When Supabase is configured (js/config.js), the shared store in
+  // js/store.supabase.js takes over and this demo store steps aside.
+  if (window.CONFIG && window.CONFIG.SUPABASE_URL && window.CONFIG.SUPABASE_ANON_KEY) return;
   var KEY = 'mim28-demo-v1';
   var listeners = [];
   var state = load() || fresh();
