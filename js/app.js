@@ -14,7 +14,7 @@
 
   function currentTab() {
     var t = location.hash.replace('#', '');
-    return ['today', 'mountain', 'team', 'schedule'].indexOf(t) >= 0 ? t : 'today';
+    return ['today', 'feed', 'mountain', 'team', 'schedule'].indexOf(t) >= 0 ? t : 'today';
   }
   function dayLabel(key) { return SEED.days.filter(function (d) { return d[0] === key; })[0][1]; }
   function chip(sub) {
@@ -109,7 +109,9 @@
     var ledger = Store.ledger(team.id).slice().reverse().map(function (l) {
       return '<li><span>' + esc(l.label) + '</span><b>+' + l.points + '</b></li>';
     }).join('');
-    return '<section><div class="team-head" style="--team:' + team.color + '"><div class="badge">' + esc(Store.displayName(team)[0].toUpperCase()) + '</div>' +
+    return '<section><div class="team-head" style="--team:' + team.color + '"><label class="badge edit' + (team.avatar ? ' has' : '') + '"' +
+      (team.avatar ? ' style="background-image:url(' + team.avatar + ')"' : '') + ' title="Change team photo">' +
+      (team.avatar ? '' : esc(Store.displayName(team)[0].toUpperCase())) + '<input id="team-photo" type="file" accept="image/*"></label>' +
       '<div><h2>' + esc(Store.displayName(team)) + '</h2><p class="fine">' + esc(team.room) + ' · ' + team.members.map(function (n) {
         return n === me.name ? '<b>' + esc(n) + '</b>' : esc(n);
       }).join(', ') + '</p></div>' +
@@ -125,10 +127,30 @@
     var days = SEED.days.map(function (d) {
       return '<button class="day' + (d[0] === schedDay ? ' on' : '') + '" data-act="pick-day" data-day="' + d[0] + '">' + d[1] + '</button>';
     }).join('');
-    var items = SEED.schedule[schedDay].map(function (it) {
-      return '<li><time>' + esc(it[0]) + '</time><div><b>' + esc(it[1]) + '</b>' + (it[2] ? '<p>' + esc(it[2]) + '</p>' : '') + '</div></li>';
+    var base = (SEED.schedule[schedDay] || []).map(function (it) { return { time: it[0], title: it[1], detail: it[2] }; });
+    var extra = Store.events(schedDay).map(function (e) { return { time: e.time, title: e.title, detail: e.detail }; });
+    var items = base.concat(extra).map(function (it) {
+      return '<li><time>' + esc(it.time) + '</time><div><b>' + esc(it.title) + '</b>' + (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') + '</div></li>';
     }).join('');
     return '<section><h2>Programme <span>draft, times to be confirmed</span></h2><div class="days">' + days + '</div><ul class="timeline">' + items + '</ul></section>';
+  }
+
+  // ---------- Feed ----------
+  function viewFeed() {
+    var posts = Store.feed();
+    if (!posts.length) {
+      return '<section><h2>Feed <span>validated moments</span></h2>' +
+        '<p class="lead" style="margin-top:28px">Nothing here yet. Approved proofs land here, newest first. Send one from Today or your Team bingo.</p></section>';
+    }
+    var items = posts.map(function (p) {
+      var name = Store.displayName(p.team), av = p.team.avatar;
+      var head = '<header class="post-head" data-act="team-info" data-id="' + p.team.id + '">' +
+        (av ? '<img class="avatar" alt="" src="' + av + '">'
+            : '<span class="avatar ini" style="background:' + p.team.color + '">' + esc(name[0].toUpperCase()) + '</span>') +
+        '<span class="post-meta"><b>' + esc(name) + '</b> accomplished <i>' + esc(p.text) + '</i></span></header>';
+      return '<article class="post">' + head + '<img class="post-img" alt="" src="' + p.thumb + '"></article>';
+    }).join('');
+    return '<section><h2>Feed <span>validated moments, newest first</span></h2>' + items + '</section>';
   }
 
   // ---------- Sheets ----------
@@ -163,11 +185,20 @@
       }).join('') + '</div>');
   }
   function sheetTeam(id) {
-    var t = Store.team(id), ledger = Store.ledger(id).slice().reverse();
-    openSheet('<div class="team-head" style="--team:' + t.color + '"><div class="badge">' + esc(Store.displayName(t)[0].toUpperCase()) + '</div>' +
+    var t = Store.team(id), ledger = Store.ledger(id).slice().reverse(), posts = Store.posts(id);
+    var badge = t.avatar
+      ? '<div class="badge has" style="background-image:url(' + t.avatar + ')"></div>'
+      : '<div class="badge">' + esc(Store.displayName(t)[0].toUpperCase()) + '</div>';
+    var gallery = posts.length
+      ? '<div class="gallery">' + posts.map(function (p) {
+          return '<div class="gphoto" style="background-image:url(' + p.thumb + ')"><span>' + esc(p.text) + '</span></div>';
+        }).join('') + '</div>'
+      : '<p class="fine">No posts yet.</p>';
+    openSheet('<div class="team-head" style="--team:' + t.color + '">' + badge +
       '<div><h3>' + esc(Store.displayName(t)) + '</h3><p class="fine">' + esc(t.room) + ' · ' + t.members.map(esc).join(', ') + '</p></div>' +
       '<div class="total"><b>' + Store.points(id) + '</b><span>pts</span></div></div>' +
-      '<ul class="ledger">' + ledger.map(function (l) { return '<li><span>' + esc(l.label) + '</span><b>+' + l.points + '</b></li>'; }).join('') + '</ul>');
+      '<h3 class="sub">Posts</h3>' + gallery +
+      '<h3 class="sub">Points</h3><ul class="ledger">' + ledger.map(function (l) { return '<li><span>' + esc(l.label) + '</span><b>+' + l.points + '</b></li>'; }).join('') + '</ul>');
   }
 
   // Shrink a photo in the browser before it is sent, so uploads stay light on mountain 4G.
@@ -224,7 +255,7 @@
     Array.prototype.forEach.call(tabsEl.querySelectorAll('a'), function (a) {
       a.classList.toggle('on', a.getAttribute('data-tab') === tab);
     });
-    app.innerHTML = { today: viewToday, mountain: viewMountain, team: viewTeam, schedule: viewSchedule }[tab]();
+    app.innerHTML = { today: viewToday, feed: viewFeed, mountain: viewMountain, team: viewTeam, schedule: viewSchedule }[tab]();
     if (tab === 'mountain') Mountain.climb(app);
   }
 
@@ -291,6 +322,9 @@
   });
   document.addEventListener('change', function (e) {
     if (e.target.id === 'sub-photo' && e.target.files[0]) shrink(e.target.files[0], Store.demo ? 480 : 1280, setPhoto);
+    if (e.target.id === 'team-photo' && e.target.files[0]) shrink(e.target.files[0], 256, function (d) {
+      if (d) { Store.setAvatar(d); toast('<b>Nice!</b> Team photo set.', 'celebrate'); }
+    });
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheetEl.hidden) closeSheet(); });
   window.addEventListener('hashchange', render);

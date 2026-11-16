@@ -17,7 +17,8 @@
       }),
       submissions: [],                            // { id, teamId, kind, refId, value, thumb, status, by }
       ballots: {},                                // voteId -> teamId voted for
-      lines: {}                                   // teamId -> bingo lines already rewarded
+      lines: {},                                  // teamId -> bingo lines already rewarded
+      events: []                                  // extra calendar events added in the back office
     };
   }
   function load() {
@@ -31,6 +32,14 @@
     return state.ledger.reduce(function (sum, l) { return l.teamId === teamId ? sum + l.points : sum; }, 0);
   }
   function displayName(t) { return t.name || t.room; }
+  function achievement(sub) {
+    if (sub.kind === 'bingo') {
+      var b = SEED.bingo.filter(function (x) { return x.id === sub.refId; })[0];
+      return b ? b.text : 'a bingo square';
+    }
+    var c = SEED.challenges.filter(function (x) { return x.id === sub.refId; })[0];
+    return c ? c.title : 'a challenge';
+  }
 
   // Same 16 squares for everyone, in an order that depends on the team.
   function bingoCard(teamId) {
@@ -128,6 +137,25 @@
       if (state.ballots[voteId] || teamId === state.me.teamId) return false;
       state.ballots[voteId] = teamId; emit({ type: 'voted' }); return true;
     },
+    avatar: function (teamId) { var t = team(teamId); return t ? (t.avatar || null) : null; },
+    setAvatar: function (dataUrl) { var t = this.myTeam(); if (!t) return; t.avatar = dataUrl; emit({ type: 'avatar' }); },
+    achievement: achievement,
+    posts: function (teamId) {
+      return state.submissions
+        .filter(function (s) { return s.status === 'approved' && s.thumb && (!teamId || s.teamId === teamId); })
+        .slice().reverse()
+        .map(function (s) { return { id: s.id, team: team(s.teamId), text: achievement(s), thumb: s.thumb, by: s.by, at: s.id }; });
+    },
+    feed: function () { return this.posts(null); },
+    events: function (day) { return state.events.filter(function (e) { return e.day === day; }); },
+    pending: function () {
+      return state.submissions.filter(function (s) { return s.status === 'pending'; })
+        .map(function (s) { return { id: s.id, team: team(s.teamId), text: achievement(s), thumb: s.thumb, by: s.by, value: s.value, kind: s.kind, at: s.id }; });
+    },
+    approveSubmission: function (id) { approve(id); },
+    rejectSubmission: function (id) { var s = state.submissions.filter(function (x) { return x.id === id; })[0]; if (s) { s.status = 'rejected'; emit({ type: 'submissions' }); } },
+    addEvent: function (ev) { state.events.push({ id: 'e' + Date.now(), day: ev.day, time: ev.time || '', title: ev.title, detail: ev.detail || '' }); emit({ type: 'events' }); },
+    deleteEvent: function (id) { state.events = state.events.filter(function (e) { return e.id !== id; }); emit({ type: 'events' }); },
     reset: function () { state = fresh(); emit({ type: 'reset' }); }
   };
 })();

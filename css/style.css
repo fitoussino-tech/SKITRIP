@@ -228,3 +228,27 @@ body { background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 48%, va
 /* keep the welcome title/lead legible over the peaks */
 .join h1 { text-shadow: 0 2px 2px rgba(7, 11, 28, .7), 0 4px 18px rgba(7, 11, 28, .9); }
 .join .lead { text-shadow: 0 1px 10px rgba(7, 11, 28, .95), 0 1px 2px rgba(7, 11, 28, .8); }
+
+/* ---------- Feed ---------- */
+.post { background: var(--navy-2); border: 3px solid #fff; border-radius: var(--doodle); overflow: hidden; margin-bottom: 16px; }
+.post:nth-of-type(even) { border-radius: 16px 24px 14px 22px / 24px 14px 22px 16px; }
+.post-head { display: flex; align-items: center; gap: 10px; padding: 11px 13px; cursor: pointer; }
+.avatar { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 50%; border: 2.5px solid #fff; object-fit: cover; background-size: cover; background-position: center; }
+.avatar.ini { display: flex; align-items: center; justify-content: center; color: var(--navy); font: 400 20px var(--hand); }
+.post-meta { font-size: 15px; line-height: 1.3; }
+.post-meta b { font-weight: 800; }
+.post-meta i { font-style: normal; color: var(--sun); }
+.post-img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-top: 3px solid #fff; background: #0b1230; }
+
+/* team photo badge + profile gallery */
+.badge.has { background-size: cover; background-position: center; color: transparent; }
+.badge.edit { position: relative; cursor: pointer; overflow: hidden; }
+.badge.edit input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.badge.edit::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--sun) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E1530' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l1.5-2h7L17 8h3v11H4z'/%3E%3Ccircle cx='12' cy='13' r='3.2'/%3E%3C/svg%3E") center / 12px no-repeat;
+  border: 2px solid #fff; }
+.sheet-body h3.sub { font-size: 20px; margin: 18px 0 8px; }
+.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gphoto { position: relative; aspect-ratio: 1; border: 2.5px solid #fff; border-radius: 14px 10px 13px 9px; background: #0b1230 center / cover no-repeat; overflow: hidden; }
+.gphoto span { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 7px 5px; font: 600 10px/1.2 var(--body);
+  background: linear-gradient(transparent, rgba(5, 9, 24, .88)); }

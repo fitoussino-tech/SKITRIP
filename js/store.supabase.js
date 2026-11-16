@@ -41,7 +41,8 @@
     ledger: [],                                             // { teamId, label, points }
     submissions: [],                                        // { id, teamId, kind, refId, value, thumb, status, by }
     ballots: {},                                            // voteId -> teamId (this device only)
-    lines: {}                                               // teamId -> bingo lines already rewarded
+    lines: {},                                              // teamId -> bingo lines already rewarded
+    events: []                                              // extra calendar events added in the back office
   };
 
   function emit(evt) { listeners.forEach(function (fn) { fn(evt || {}); }); }
@@ -95,12 +96,26 @@
   }
   function clamp(v, n) { return typeof v === 'string' ? v.slice(0, n) : v; }
 
+  // Human label for a proof: the challenge title, or the bingo square text.
+  function achievement(sub) {
+    if (sub.kind === 'bingo') {
+      var b = SEED.bingo.filter(function (x) { return x.id === sub.refId; })[0];
+      return b ? b.text : 'a bingo square';
+    }
+    var c = SEED.challenges.filter(function (x) { return x.id === sub.refId; })[0];
+    return c ? c.title : 'a challenge';
+  }
+
   // ---------- row mapping ----------
   function mapSub(row) {
     return { id: row.id, teamId: row.team_id, kind: row.kind, refId: row.ref_id,
-      value: row.value, thumb: safeThumb(row.thumb), status: safeStatus(row.status), by: row.by };
+      value: row.value, thumb: safeThumb(row.thumb), status: safeStatus(row.status),
+      by: row.by, createdAt: row.created_at };
   }
   function mapLedger(row) { return { teamId: row.team_id, label: row.label, points: row.points }; }
+  function mapEvent(row) {
+    return { id: row.id, day: row.day, time: row.time, title: row.title, detail: row.detail, at: row.created_at };
+  }
 
   // ---------- loads ----------
   function loadTeams() {
@@ -113,6 +128,7 @@
         var col = safeColor(row.color);
         if (col) t.color = col;                        // ignore unsafe colours, keep the seed one
         t.room = row.room; t.code = row.code;
+        t.avatar = safeThumb(row.avatar);
         if (row.members) t.members = row.members;
       });
     });
@@ -139,6 +155,13 @@
     });
   }
 
+  function loadEvents() {
+    return db.from('events').select('*').order('created_at').then(function (res) {
+      if (res.error || !res.data) return;
+      state.events = res.data.map(mapEvent);
+    });
+  }
+
   // Seed the teams table the first time (idempotent: existing rows are left as-is,
   // so player-chosen names and colours are never overwritten).
   function seedTeams() {
@@ -150,7 +173,7 @@
 
   function init() {
     seedTeams()
-      .then(function () { return Promise.all([loadTeams(), loadLedger(), loadSubmissions(), loadMyBallots()]); })
+      .then(function () { return Promise.all([loadTeams(), loadLedger(), loadSubmissions(), loadMyBallots(), loadEvents()]); })
       .then(function () { emit({ type: 'ready' }); })
       .catch(function (e) { console.error('[store] init failed', e); });
 
@@ -163,6 +186,8 @@
         function () { loadSubmissions().then(function () { emit({ type: 'submissions' }); }); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ballots' },
         function () { loadMyBallots().then(function () { emit({ type: 'ballots' }); }); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' },
+        function () { loadEvents().then(function () { emit({ type: 'events' }); }); })
       .subscribe();
   }
 
@@ -260,6 +285,52 @@
       });
       return true;
     },
+    // ----- team profile photo -----
+    avatar: function (teamId) { var t = team(teamId); return t ? (t.avatar || null) : null; },
+    setAvatar: function (dataUrl) {
+      var t = this.myTeam(); if (!t) return;
+      t.avatar = dataUrl; emit({ type: 'avatar' });
+      db.from('teams').update({ avatar: dataUrl }).eq('id', t.id).then(function () {});
+    },
+
+    // ----- feed / team posts -----
+    achievement: achievement,
+    posts: function (teamId) {                     // approved proofs with a photo, newest first
+      return state.submissions
+        .filter(function (s) { return s.status === 'approved' && s.thumb && (!teamId || s.teamId === teamId); })
+        .sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); })
+        .map(function (s) { return { id: s.id, team: team(s.teamId), text: achievement(s), thumb: s.thumb, by: s.by, at: s.createdAt }; });
+    },
+    feed: function () { return this.posts(null); },
+
+    // ----- calendar -----
+    events: function (day) { return state.events.filter(function (e) { return e.day === day; }); },
+
+    // ----- admin back office -----
+    pending: function () {                          // proofs waiting for review, oldest first
+      return state.submissions
+        .filter(function (s) { return s.status === 'pending'; })
+        .sort(function (a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); })
+        .map(function (s) { return { id: s.id, team: team(s.teamId), text: achievement(s),
+          thumb: s.thumb, by: s.by, value: s.value, kind: s.kind, at: s.createdAt }; });
+    },
+    approveSubmission: function (id) {
+      var s = state.submissions.filter(function (x) { return x.id === id; })[0];
+      if (s && s.status === 'pending') approve(s);
+    },
+    rejectSubmission: function (id) {
+      db.from('submissions').update({ status: 'rejected' }).eq('id', id)
+        .then(function () { loadSubmissions().then(function () { emit({ type: 'submissions' }); }); });
+    },
+    addEvent: function (ev) {
+      return db.from('events').insert({ day: ev.day, time: ev.time || '', title: ev.title, detail: ev.detail || '' })
+        .then(function () { return loadEvents(); }).then(function () { emit({ type: 'events' }); });
+    },
+    deleteEvent: function (id) {
+      return db.from('events').delete().eq('id', id)
+        .then(function () { return loadEvents(); }).then(function () { emit({ type: 'events' }); });
+    },
+
     // In the shared app, "reset" just signs this phone out. It never wipes the DB.
     reset: function () {
       state.me = null; try { localStorage.removeItem(ME_KEY); } catch (e) {}

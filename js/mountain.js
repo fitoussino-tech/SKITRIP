@@ -16,13 +16,17 @@
   function alpinist(entry, mine) {
     var t = entry.team, start = spot(entry.index, 0);
     var initial = (Store.displayName(t).replace(/^(The|Les) /, '')[0] || '?').toUpperCase();
+    var face = t.avatar
+      ? '<clipPath id="c-' + t.id + '"><circle r="10.5"/></clipPath>' +
+        '<image href="' + t.avatar + '" x="-10.5" y="-10.5" width="21" height="21" clip-path="url(#c-' + t.id + ')" preserveAspectRatio="xMidYMid slice"/>' +
+        '<circle r="10.5" fill="none" stroke="#fff" stroke-width="2.5"/>'
+      : '<circle r="10.5" fill="' + t.color + '" stroke="#fff" stroke-width="2.5"/><text y="4" text-anchor="middle">' + initial + '</text>';
     return '<g class="alp' + (mine ? ' mine' : '') + '" data-act="team-info" data-id="' + t.id + '" ' +
       'data-index="' + entry.index + '" data-points="' + entry.points + '" ' +
       'style="transform:translate(' + start.x + 'px,' + start.y + 'px)">' +
       (mine ? '<circle class="ring" r="17" fill="none" stroke="#fff" stroke-width="2"/>' : '') +
       '<path d="M-9 -5 Q0 -21 9 -5 Z" fill="#fff"/><circle cx="0" cy="-17" r="3" fill="#fff"/>' +
-      '<circle r="10.5" fill="' + t.color + '" stroke="#fff" stroke-width="2.5"/>' +
-      '<text y="4" text-anchor="middle">' + initial + '</text>' +
+      face +
       (mine ? '<text class="you" y="27" text-anchor="middle">YOU</text>' : '') +
       '</g>';
   }
