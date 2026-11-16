@@ -13,14 +13,38 @@ temps réel entre tous les téléphones. ~10 minutes, gratuit.
 
 ## 2. Créer les tables
 1. Menu de gauche → **SQL Editor** → **New query**.
-2. Ouvre le fichier `supabase/schema.sql` de ce repo, copie **tout** son contenu, colle-le.
-3. Clique **Run**. Tu dois voir « Success ». (Ça crée les tables, le temps réel et les règles d'accès.)
+2. Ouvre `supabase/schema.sql`, copie **tout** son contenu, colle-le, clique **Run** (« Success »).
+3. Refais la même chose avec `supabase/schema_v2.sql`, puis avec `supabase/schema_v3.sql`.
+   Toujours dans cet ordre. Chaque script ne se lance qu'une fois, mais `schema_v3.sql`
+   peut être relancé sans risque.
+
+`schema_v3.sql` met en place le vrai back-office : comptes organisateurs, joueurs connectés,
+challenges et programme éditables, photos sorties des lignes de preuves, et des règles d'accès
+où seuls les organisateurs peuvent valider, attribuer des points ou modifier le contenu.
+
+## 2 bis. Comptes organisateurs
+Chaque organisateur a un compte Supabase (un compte partagé marche aussi : c'est une seule ligne).
+1. Menu de gauche → **Authentication** → **Users** → **Add user** → **Create new user**.
+   Mets l'email et un mot de passe, et coche **Auto Confirm User**.
+2. **SQL Editor** → **New query**, colle ceci avec les bons emails, puis **Run** :
+
+```sql
+insert into admins (user_id, email)
+select id, email from auth.users
+where email in ('noam@exemple.com', 'thibault@exemple.com')
+on conflict (user_id) do nothing;
+```
+
+3. Ouvre `admin.html` (lien « Organisers » sur l'écran d'accueil de l'app) et connecte-toi.
+
+Pour retirer un organisateur : `delete from admins where email = '...';`
+Un compte Supabase qui n'est pas dans `admins` n'a aucun droit de plus qu'un joueur.
 
 ## 3. Récupérer les clés
 1. Menu de gauche → **Project Settings** (l'engrenage) → **API**.
 2. Copie :
    - **Project URL** (ex. `https://abcdxyz.supabase.co`)
-   - **anon public** key (la clé « anon », publique, prévue pour le client)
+   - **Publishable key** (ou « anon public » sur les anciens projets) : la clé publique, prévue pour le client
 
 ## 4. Renseigner l'app
 Ouvre `js/config.js` et colle les deux valeurs :
@@ -28,30 +52,31 @@ Ouvre `js/config.js` et colle les deux valeurs :
 ```js
 window.CONFIG = {
   SUPABASE_URL: 'https://abcdxyz.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJ...ta_cle_anon...',
-  AUTO_APPROVE: true
+  SUPABASE_ANON_KEY: 'sb_publishable_...'
 };
 ```
 
 ## 5. Tester
 - Ouvre `index.html` dans un navigateur (ou l'URL GitHub Pages).
-- Les 15 équipes se créent toutes seules dans la table `teams` au premier chargement.
+- Les 15 chambres se créent toutes seules dans la table `teams` au premier chargement.
 - Rejoins avec un code chambre (ex. `R101`, ou `DEMO` pour l'équipe 7), choisis ton nom,
   nomme ton équipe.
 - Ouvre la même URL sur un **deuxième téléphone / navigateur**, rejoins une autre chambre :
   les noms d'équipe, les points et les votes doivent apparaître des deux côtés en direct.
 
 ## Notes
-- **AUTO_APPROVE = true** : tant qu'il n'y a pas de back-office, le téléphone qui envoie une
-  preuve valide lui-même et écrit les points (pratique pour tester tout de suite). On passera à
-  `false` quand les organisateurs valideront les preuves.
-- **Sécurité** : modèle léger (clé anon + règles permissives), adapté à un groupe connu de ~150
-  étudiants. La clé anon est faite pour être publique. Rien de sensible n'est stocké.
-  Limites assumées pour l'instant (détaillées en bas de `supabase/schema.sql`) : avec
-  `AUTO_APPROVE`, l'attribution des points repose sur la confiance (un étudiant motivé pourrait
-  s'auto-attribuer des points via l'API), et les votes sont faillibles. On ferme ça avec le
-  back-office (attribution des points côté serveur). L'injection via photo/couleur, elle, est
-  déjà bloquée (CHECK en base + nettoyage côté client).
-- **Photos** : pour l'instant les preuves photo sont réduites et stockées en base (format data URL).
-  Le vrai upload (Supabase Storage) est une étape suivante.
+- **Validation** : une preuve reste « en attente » tant qu'un organisateur ne l'a pas validée
+  dans le back-office. Les points ne sont écrits qu'à ce moment-là, par la base elle-même.
+- **Sécurité** : la clé « publishable » est faite pour être publique ; ce sont les règles de la
+  base qui protègent. Les joueurs n'ont pas de compte (code chambre + prénom), donc ils peuvent
+  encore renommer une équipe, changer sa photo, envoyer une preuve au nom d'une autre équipe
+  (elle reste en attente) et voter deux fois avec deux appareils. Ils ne peuvent pas créer de
+  points, valider une preuve, ni toucher aux challenges, au programme ou aux réglages.
+  Détail en bas de `supabase/schema_v3.sql`.
+- **Photos** : réduites dans le navigateur, puis stockées dans la table `submission_photos`.
+  Chaque téléphone ne télécharge que les photos qu'il affiche. Le passage à Supabase Storage
+  est une étape suivante.
+- **Repartir de zéro** : back-office → Settings → « Restart from zero ». Efface points, preuves,
+  photos, votes, joueurs connectés, noms et photos d'équipe, et renvoie tous les téléphones à
+  l'écran du code chambre. Les challenges et le programme sont conservés.
 - **Revenir à la démo** : laisse `SUPABASE_URL` / `SUPABASE_ANON_KEY` vides dans `js/config.js`.

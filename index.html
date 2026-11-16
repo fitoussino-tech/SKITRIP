@@ -14,12 +14,21 @@
 <div id="sky" aria-hidden="true">
   <span class="stars"></span>
   <span class="moon"></span>
-  <svg class="peaks" viewBox="0 0 480 300" preserveAspectRatio="xMidYMax slice">
-    <path class="ridge-far" d="M0 236 L64 168 L116 206 L182 138 L244 198 L312 150 L384 200 L456 158 L480 182 L480 300 L0 300 Z"/>
-    <path class="ridge-near" d="M-10 320 L-10 244 L40 190 L92 250 L150 150 L214 232 L286 176 L356 246 L420 182 L490 240 L490 320 Z"/>
-    <path class="snowcap" d="M132 171 L150 150 L169 172 L160 166 L150 162 L140 167 Z"/>
-    <path class="snowcap" d="M270 195 L286 176 L303 196 L295 190 L286 186 L277 191 Z"/>
-    <path class="snowcap" d="M405 200 L420 182 L436 201 L428 195 L420 191 L412 196 Z"/>
+  <svg class="peaks" viewBox="0 0 1440 320">
+    <defs><clipPath id="ridge-clip"><path d="M-20 320 L-20 270 L70 210 L150 265 L260 175 L350 255 L450 205 L540 268 L660 165 L770 262 L860 215 L960 270 L1080 180 L1180 262 L1290 205 L1380 262 L1460 230 L1460 320 Z"/></clipPath></defs>
+    <path class="ridge-far" d="M0 250 L90 170 L170 215 L270 120 L360 200 L470 140 L560 210 L680 110 L790 205 L900 150 L1010 215 L1120 125 L1230 205 L1330 160 L1440 220 L1440 320 L0 320 Z"/>
+    <path class="ridge-near" d="M-20 320 L-20 270 L70 210 L150 265 L260 175 L350 255 L450 205 L540 268 L660 165 L770 262 L860 215 L960 270 L1080 180 L1180 262 L1290 205 L1380 262 L1460 230 L1460 320 Z"/>
+    <g class="snowcap" clip-path="url(#ridge-clip)">
+      <path d="M30 0 H110 V224 L96 232 L84 222 L70 236 L58 223 L44 232 L30 224 Z"/>
+      <path d="M215 0 H305 V192 L288 203 L274 190 L260 206 L246 191 L232 203 L215 192 Z"/>
+      <path d="M410 0 H490 V220 L476 228 L464 218 L450 231 L438 219 L424 228 L410 220 Z"/>
+      <path d="M615 0 H705 V182 L688 194 L674 180 L660 197 L646 181 L632 194 L615 182 Z"/>
+      <path d="M820 0 H900 V230 L886 238 L874 228 L860 241 L848 229 L834 238 L820 230 Z"/>
+      <path d="M1035 0 H1125 V197 L1108 208 L1094 195 L1080 211 L1066 196 L1052 208 L1035 197 Z"/>
+      <path d="M1250 0 H1330 V220 L1316 228 L1304 218 L1290 231 L1278 219 L1264 228 L1250 220 Z"/>
+    </g>
+    <path class="ridge-line" d="M-20 270 L70 210 L150 265 L260 175 L350 255 L450 205 L540 268 L660 165 L770 262 L860 215 L960 270 L1080 180 L1180 262 L1290 205 L1380 262 L1460 230"/>
+    <path class="ground" d="M0 304 Q240 290 480 300 T960 298 T1440 300 V320 H0 Z"/>
   </svg>
   <i class="flake"></i><i class="flake"></i><i class="flake"></i><i class="flake"></i>
   <i class="flake"></i><i class="flake"></i><i class="flake"></i><i class="flake"></i>
@@ -42,8 +51,8 @@
 <script src="js/seed.js"></script>
 <script src="js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
-<script src="js/store.js"></script>
 <script src="js/store.supabase.js"></script>
+<script src="js/store.js"></script>
 <script src="js/mascot.js"></script>
 <script src="js/mountain.js"></script>
 <script src="js/app.js"></script>
