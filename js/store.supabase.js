@@ -89,12 +89,16 @@
   function safeColor(v) {
     return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null;
   }
+  // status is injected into a class attribute by app.js, so allow-list it.
+  function safeStatus(v) {
+    return (v === 'approved' || v === 'rejected') ? v : 'pending';
+  }
   function clamp(v, n) { return typeof v === 'string' ? v.slice(0, n) : v; }
 
   // ---------- row mapping ----------
   function mapSub(row) {
     return { id: row.id, teamId: row.team_id, kind: row.kind, refId: row.ref_id,
-      value: row.value, thumb: safeThumb(row.thumb), status: row.status, by: row.by };
+      value: row.value, thumb: safeThumb(row.thumb), status: safeStatus(row.status), by: row.by };
   }
   function mapLedger(row) { return { teamId: row.team_id, label: row.label, points: row.points }; }
 

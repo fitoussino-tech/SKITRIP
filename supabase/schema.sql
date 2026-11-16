@@ -30,7 +30,7 @@ create table if not exists submissions (
   ref_id     text not null,            -- challenge id or bingo square id
   value      text,                     -- typed value (e.g. a race number)
   thumb      text check (thumb is null or thumb ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,'),  -- data URL only (anti-injection)
-  status     text not null default 'pending',  -- 'pending' | 'approved' | 'rejected'
+  status     text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   by         text,                     -- player name
   created_at timestamptz not null default now()
 );
