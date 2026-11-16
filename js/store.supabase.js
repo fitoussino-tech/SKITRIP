@@ -78,10 +78,23 @@
     return n;
   }
 
+  // ---------- untrusted-input guards ----------
+  // Shared data comes from other phones, so sanitise the two fields app.js injects
+  // into HTML without escaping: `thumb` (an <img src>) and `color` (inline style).
+  // Everything else app.js renders through esc(). This blocks stored XSS at the
+  // boundary; the DB adds CHECK constraints as a second layer (see schema.sql).
+  function safeThumb(v) {
+    return (typeof v === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]*$/i.test(v)) ? v : null;
+  }
+  function safeColor(v) {
+    return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null;
+  }
+  function clamp(v, n) { return typeof v === 'string' ? v.slice(0, n) : v; }
+
   // ---------- row mapping ----------
   function mapSub(row) {
     return { id: row.id, teamId: row.team_id, kind: row.kind, refId: row.ref_id,
-      value: row.value, thumb: row.thumb, status: row.status, by: row.by };
+      value: row.value, thumb: safeThumb(row.thumb), status: row.status, by: row.by };
   }
   function mapLedger(row) { return { teamId: row.team_id, label: row.label, points: row.points }; }
 
@@ -91,8 +104,12 @@
       if (res.error || !res.data) return;
       res.data.forEach(function (row) {
         var t = team(row.id);
-        if (t) { t.name = row.name; t.color = row.color; t.room = row.room; t.code = row.code;
-          if (row.members) t.members = row.members; }
+        if (!t) return;
+        t.name = clamp(row.name, 40);                 // esc()'d by app.js; cap length only
+        var col = safeColor(row.color);
+        if (col) t.color = col;                        // ignore unsafe colours, keep the seed one
+        t.room = row.room; t.code = row.code;
+        if (row.members) t.members = row.members;
       });
     });
   }

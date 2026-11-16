@@ -47,6 +47,11 @@ window.CONFIG = {
   `false` quand les organisateurs valideront les preuves.
 - **Sécurité** : modèle léger (clé anon + règles permissives), adapté à un groupe connu de ~150
   étudiants. La clé anon est faite pour être publique. Rien de sensible n'est stocké.
+  Limites assumées pour l'instant (détaillées en bas de `supabase/schema.sql`) : avec
+  `AUTO_APPROVE`, l'attribution des points repose sur la confiance (un étudiant motivé pourrait
+  s'auto-attribuer des points via l'API), et les votes sont faillibles. On ferme ça avec le
+  back-office (attribution des points côté serveur). L'injection via photo/couleur, elle, est
+  déjà bloquée (CHECK en base + nettoyage côté client).
 - **Photos** : pour l'instant les preuves photo sont réduites et stockées en base (format data URL).
   Le vrai upload (Supabase Storage) est une étape suivante.
 - **Revenir à la démo** : laisse `SUPABASE_URL` / `SUPABASE_ANON_KEY` vides dans `js/config.js`.

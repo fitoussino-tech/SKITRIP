@@ -12,7 +12,7 @@ create table if not exists teams (
   room    text not null,               -- 'Room 1'
   members jsonb not null default '[]',
   name    text,                        -- chosen by players (null -> show room)
-  color   text                         -- chosen by players
+  color   text check (color is null or color ~ '^#[0-9A-Fa-f]{3,8}$')  -- hex only (anti-injection)
 );
 
 create table if not exists ledger (
@@ -29,7 +29,7 @@ create table if not exists submissions (
   kind       text not null,            -- 'challenge' | 'bingo'
   ref_id     text not null,            -- challenge id or bingo square id
   value      text,                     -- typed value (e.g. a race number)
-  thumb      text,                     -- data URL of the shrunk proof photo (interim)
+  thumb      text check (thumb is null or thumb ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,'),  -- data URL only (anti-injection)
   status     text not null default 'pending',  -- 'pending' | 'approved' | 'rejected'
   by         text,                     -- player name
   created_at timestamptz not null default now()
@@ -69,3 +69,17 @@ create policy "insert submissions" on submissions for insert with check (true);
 create policy "update submissions" on submissions for update using (true) with check (true);
 create policy "insert ledger"      on ledger      for insert with check (true);
 create policy "insert ballots"     on ballots     for insert with check (true);
+
+-- ---------- Known, accepted trade-offs (light security model) ----------
+-- Chosen on purpose for a known group of ~150 students. These are NOT closed yet:
+--   * anon can INSERT ledger rows  -> with AUTO_APPROVE the phone awards its own points,
+--     so points are trust-based (a motivated student could self-award via the API).
+--   * anon can UPDATE teams/submissions -> anyone can rename any team or flip a
+--     submission's status.
+--   * ballots are keyed by a client-chosen voter_id -> vote-stuffing is possible.
+-- These close in the back-office phase: move point-awarding into a SECURITY DEFINER
+-- function (or Edge Function) that recomputes points server-side, flip AUTO_APPROVE to
+-- false, and (optionally) switch to Supabase anonymous auth so writes are tied to
+-- auth.uid() and restricted to the caller's own team.
+-- Already mitigated here: stored-XSS via `thumb`/`color` (CHECK constraints above +
+-- client-side sanitisation in js/store.supabase.js).
