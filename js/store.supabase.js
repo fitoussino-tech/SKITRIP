@@ -15,6 +15,9 @@
   var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   var autoApprove = cfg.AUTO_APPROVE !== false;
   var STORAGE_PREFIX = String(cfg.SUPABASE_URL).replace(/\/+$/, '') + '/storage/v1/object/public/';
+  // Strict: exactly the public URL shape our uploadPhoto() produces. Blocks any
+  // crafted value with ) ; ' etc. that could break out of a CSS url(...) sink.
+  var STORAGE_RE = new RegExp('^' + STORAGE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + 'proofs/[A-Za-z0-9_-]+/[0-9]+-[a-z0-9]+\\.jpg$');
 
   var ME_KEY = 'mim28-me-v1';
   var DEVICE_KEY = 'mim28-device-v1';
@@ -88,7 +91,7 @@
   function safeThumb(v) {
     if (typeof v !== 'string') return null;
     if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]*$/i.test(v)) return v;                 // inline (legacy)
-    if (v.indexOf(STORAGE_PREFIX) === 0 && /^[A-Za-z0-9._~:\/?#\[\]@!$&'()*+,;=%-]+$/.test(v)) return v;    // our Storage URL
+    if (STORAGE_RE.test(v)) return v;                                                                      // our Storage URL (strict path)
     return null;
   }
   function safeColor(v) {

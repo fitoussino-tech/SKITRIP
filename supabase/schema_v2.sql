@@ -36,20 +36,23 @@ alter table submissions drop constraint if exists submissions_thumb_ok;
 alter table submissions add constraint submissions_thumb_ok check (
   thumb is null
   or thumb ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,'
-  or thumb ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/'
+  or thumb ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/proofs/[A-Za-z0-9_-]+/[0-9]+-[a-z0-9]+\.jpg$'
 );
 
 alter table teams drop constraint if exists teams_avatar_ok;
 alter table teams add constraint teams_avatar_ok check (
   avatar is null
   or avatar ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,'
-  or avatar ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/'
+  or avatar ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/proofs/[A-Za-z0-9_-]+/[0-9]+-[a-z0-9]+\.jpg$'
 );
 
--- ---------- Photo storage: a public bucket + anon upload/read ----------
-insert into storage.buckets (id, name, public) values ('proofs', 'proofs', true)
-  on conflict (id) do nothing;
+-- ---------- Photo storage: a public bucket (JPEG only, <= 3 MB) + anon upload/read ----------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('proofs', 'proofs', true, 3145728, array['image/jpeg'])
+  on conflict (id) do update
+    set public = true, file_size_limit = 3145728, allowed_mime_types = array['image/jpeg'];
 drop policy if exists "proofs read"  on storage.objects;
 drop policy if exists "proofs write" on storage.objects;
 create policy "proofs read"  on storage.objects for select using (bucket_id = 'proofs');
-create policy "proofs write" on storage.objects for insert with check (bucket_id = 'proofs');
+create policy "proofs write" on storage.objects for insert
+  with check (bucket_id = 'proofs' and storage.extension(name) = 'jpg');
