@@ -1,5 +1,7 @@
-// Demo content for the MIM28 ski trip app.
-// In the real app all of this comes from Supabase and is edited in the back office.
+// Content for the MIM28 ski trip app.
+// Rooms, bingo squares and the vote are defined here. Challenges, the programme and the
+// salamander's message start from here in the demo; on the real site they live in Supabase
+// and are edited in the back office (admin.html).
 (function () {
   var teamNames = ['Powder Pandas', 'Les Marmottes', 'Raclette Royale', 'Black Diamond Divas',
     'Fondue Fighters', 'Yeti Squad', null, 'Snow Problem', 'Genepi Gang', 'Chairlift Chatters',
@@ -27,7 +29,9 @@
 
   window.SEED = {
     summit: 2000,            // points that equal the summit
-    today: 'tue',
+    today: 'tue',            // day shown before and after the trip (during it, the calendar decides)
+    dates: { mon: '2027-01-04', tue: '2027-01-05', wed: '2027-01-06', thu: '2027-01-07', fri: '2027-01-08', sat: '2027-01-09' },
+    racePart: 20,            // points for taking part in a race (the podium is awarded in the back office)
     palette: palette,
     teams: teams,
     seedPoints: seedPoints,

@@ -1,362 +1,298 @@
-// Shared data layer backed by Supabase. Same public shape as the demo Store in
-// store.js, so none of the screens (app.js) change. A local in-memory cache keeps
-// every getter synchronous; writes go to Supabase and Realtime pushes changes back
-// to every connected phone.
+// Supabase back end for the Store (see js/store.js): data shared live between all phones.
+// It only loads rows, writes them, and listens for changes. The rules of the game live in store.js.
+// Database structure and access rules: supabase/schema.sql, schema_v2.sql, schema_v3.sql.
 //
-// Skips itself (leaving the demo store in place) when Supabase is not configured.
+// Skips itself (the Store then runs the local demo) when js/config.js is empty.
 (function () {
   var cfg = window.CONFIG || {};
-  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) return;          // not configured -> demo
+  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) return;
   if (!window.supabase || !window.supabase.createClient) {
-    console.error('[store] Supabase client script missing; staying on demo.');
+    console.error('[store] The Supabase client did not load; running the offline demo instead.');
+    window.STORE_OFFLINE = true;
     return;
   }
 
-  var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-  var autoApprove = cfg.AUTO_APPROVE !== false;
-  var STORAGE_PREFIX = String(cfg.SUPABASE_URL).replace(/\/+$/, '') + '/storage/v1/object/public/';
-  // Strict: exactly the public URL shape our uploadPhoto() produces. Blocks any
-  // crafted value with ) ; ' etc. that could break out of a CSS url(...) sink.
-  var STORAGE_RE = new RegExp('^' + STORAGE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + 'proofs/[A-Za-z0-9_-]+/[0-9]+-[a-z0-9]+\\.jpg$');
+  window.SupabaseBackend = function (ctx) {
+    var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    var st = ctx.state;
+    var EPOCH_KEY = 'mim28-epoch-v1', DEVICE_KEY = 'mim28-device-v1';
 
-  var ME_KEY = 'mim28-me-v1';
-  var DEVICE_KEY = 'mim28-device-v1';
-  var listeners = [];
-
-  function readJSON(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
-  function writeJSON(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
-
-  function deviceId() {
-    var id = null;
-    try { id = localStorage.getItem(DEVICE_KEY); } catch (e) {}
-    if (!id) {
-      id = 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-      try { localStorage.setItem(DEVICE_KEY, id); } catch (e) {}
-    }
-    return id;
-  }
-  var VOTER = deviceId();
-
-  // Cache mirrors the demo state. Teams start from SEED so the UI has something to
-  // show on first paint; Supabase hydrates name/colour/points right after.
-  var state = {
-    me: readJSON(ME_KEY),                                   // { teamId, name }
-    teams: JSON.parse(JSON.stringify(SEED.teams)),
-    ledger: [],                                             // { teamId, label, points }
-    submissions: [],                                        // { id, teamId, kind, refId, value, thumb, status, by }
-    ballots: {},                                            // voteId -> teamId (this device only)
-    lines: {},                                              // teamId -> bingo lines already rewarded
-    events: []                                              // extra calendar events added in the back office
-  };
-
-  function emit(evt) { listeners.forEach(function (fn) { fn(evt || {}); }); }
-
-  // ---------- pure helpers (identical to the demo) ----------
-  function team(id) { return state.teams.filter(function (t) { return t.id === id; })[0] || null; }
-  function points(teamId) {
-    return state.ledger.reduce(function (sum, l) { return l.teamId === teamId ? sum + l.points : sum; }, 0);
-  }
-  function displayName(t) { return t.name || t.room; }
-  function bingoCard(teamId) {
-    var seed = parseInt(teamId.slice(1), 10) * 9301 + 49297;
-    var squares = SEED.bingo.slice();
-    for (var i = squares.length - 1; i > 0; i--) {
-      seed = (seed * 9301 + 49297) % 233280;
-      var j = Math.floor(seed / 233280 * (i + 1));
-      var tmp = squares[i]; squares[i] = squares[j]; squares[j] = tmp;
-    }
-    return squares;
-  }
-  function submissionFor(teamId, kind, refId) {
-    var list = state.submissions.filter(function (s) { return s.teamId === teamId && s.kind === kind && s.refId === refId; });
-    return list[list.length - 1] || null;
-  }
-  function completedLines(teamId) {
-    var card = bingoCard(teamId).map(function (sq) {
-      var s = submissionFor(teamId, 'bingo', sq.id); return !!s && s.status === 'approved';
-    });
-    var n = 0, r, c, ok;
-    for (r = 0; r < 4; r++) { ok = true; for (c = 0; c < 4; c++) ok = ok && card[r * 4 + c]; if (ok) n++; }
-    for (c = 0; c < 4; c++) { ok = true; for (r = 0; r < 4; r++) ok = ok && card[r * 4 + c]; if (ok) n++; }
-    ok = true; for (r = 0; r < 4; r++) ok = ok && card[r * 5]; if (ok) n++;
-    ok = true; for (r = 0; r < 4; r++) ok = ok && card[r * 3 + 3]; if (ok) n++;
-    return n;
-  }
-
-  // ---------- untrusted-input guards ----------
-  // Shared data comes from other phones, so sanitise the two fields app.js injects
-  // into HTML without escaping: `thumb` (an <img src>) and `color` (inline style).
-  // Everything else app.js renders through esc(). This blocks stored XSS at the
-  // boundary; the DB adds CHECK constraints as a second layer (see schema.sql).
-  function safeThumb(v) {
-    if (typeof v !== 'string') return null;
-    if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]*$/i.test(v)) return v;                 // inline (legacy)
-    if (STORAGE_RE.test(v)) return v;                                                                      // our Storage URL (strict path)
-    return null;
-  }
-  function safeColor(v) {
-    return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null;
-  }
-  // status is injected into a class attribute by app.js, so allow-list it.
-  function safeStatus(v) {
-    return (v === 'approved' || v === 'rejected') ? v : 'pending';
-  }
-  function clamp(v, n) { return typeof v === 'string' ? v.slice(0, n) : v; }
-
-  // Human label for a proof: the challenge title, or the bingo square text.
-  function achievement(sub) {
-    if (sub.kind === 'bingo') {
-      var b = SEED.bingo.filter(function (x) { return x.id === sub.refId; })[0];
-      return b ? b.text : 'a bingo square';
-    }
-    var c = SEED.challenges.filter(function (x) { return x.id === sub.refId; })[0];
-    return c ? c.title : 'a challenge';
-  }
-
-  // ---------- row mapping ----------
-  function mapSub(row) {
-    return { id: row.id, teamId: row.team_id, kind: row.kind, refId: row.ref_id,
-      value: row.value, thumb: safeThumb(row.thumb), status: safeStatus(row.status),
-      by: row.by, createdAt: row.created_at };
-  }
-  function mapLedger(row) { return { teamId: row.team_id, label: row.label, points: row.points }; }
-  function mapEvent(row) {
-    return { id: row.id, day: row.day, time: row.time, title: row.title, detail: row.detail, at: row.created_at };
-  }
-
-  // ---------- loads ----------
-  function loadTeams() {
-    return db.from('teams').select('*').then(function (res) {
-      if (res.error || !res.data) return;
-      res.data.forEach(function (row) {
-        var t = team(row.id);
-        if (!t) return;
-        t.name = clamp(row.name, 40);                 // esc()'d by app.js; cap length only
-        var col = safeColor(row.color);
-        if (col) t.color = col;                        // ignore unsafe colours, keep the seed one
-        t.room = row.room; t.code = row.code;
-        t.avatar = safeThumb(row.avatar);
-        if (row.members) t.members = row.members;
-      });
-    });
-  }
-  function loadLedger() {
-    return db.from('ledger').select('*').then(function (res) {
-      if (res.error || !res.data) return;
-      state.ledger = res.data.map(mapLedger);
-    });
-  }
-  function loadSubmissions() {
-    return db.from('submissions').select('*').order('created_at').then(function (res) {
-      if (res.error || !res.data) return;
-      state.submissions = res.data.map(mapSub);
-      state.teams.forEach(function (t) { state.lines[t.id] = completedLines(t.id); });
-    });
-  }
-  function loadMyBallots() {
-    return db.from('ballots').select('vote_id, team_id').eq('voter_id', VOTER).then(function (res) {
-      if (res.error || !res.data) return;
-      var map = {};
-      res.data.forEach(function (row) { map[row.vote_id] = row.team_id; });
-      state.ballots = map;
-    });
-  }
-
-  function loadEvents() {
-    return db.from('events').select('*').order('created_at').then(function (res) {
-      if (res.error || !res.data) return;
-      state.events = res.data.map(mapEvent);
-    });
-  }
-
-  // Seed the teams table the first time (idempotent: existing rows are left as-is,
-  // so player-chosen names and colours are never overwritten).
-  function seedTeams() {
-    var rows = SEED.teams.map(function (t) {
-      return { id: t.id, code: t.code, room: t.room, members: t.members, name: t.name, color: t.color };
-    });
-    return db.from('teams').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
-  }
-
-  function init() {
-    seedTeams()
-      .then(function () { return Promise.all([loadTeams(), loadLedger(), loadSubmissions(), loadMyBallots(), loadEvents()]); })
-      .then(function () { emit({ type: 'ready' }); })
-      .catch(function (e) { console.error('[store] init failed', e); });
-
-    db.channel('skitrip')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' },
-        function () { loadTeams().then(function () { emit({ type: 'teams' }); }); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger' },
-        function () { loadLedger().then(function () { emit({ type: 'ledger' }); }); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' },
-        function () { loadSubmissions().then(function () { emit({ type: 'submissions' }); }); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ballots' },
-        function () { loadMyBallots().then(function () { emit({ type: 'ballots' }); }); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' },
-        function () { loadEvents().then(function () { emit({ type: 'events' }); }); })
-      .subscribe();
-  }
-
-  // ---------- interim approval (no back office yet) ----------
-  function approve(sub) {
-    var gained = 0, label;
-    if (sub.kind === 'bingo') {
-      gained = SEED.bingoPoints; label = 'Bingo square';
-    } else {
-      var ch = SEED.challenges.filter(function (c) { return c.id === sub.refId; })[0];
-      if (!ch) return;
-      gained = ch.kind === 'race' ? 20 : ch.points;
-      label = ch.title + (ch.kind === 'race' ? ' (taking part)' : '');
+    // one anonymous id per device, used for "one vote per device"
+    var VOTER = null;
+    try { VOTER = localStorage.getItem(DEVICE_KEY); } catch (e) {}
+    if (!VOTER) {
+      VOTER = 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      try { localStorage.setItem(DEVICE_KEY, VOTER); } catch (e) {}
     }
 
-    var writes = [{ team_id: sub.teamId, label: label, points: gained }];
+    function data(res) { if (res.error) throw res.error; return res.data; }
 
-    // mark approved in the cache so bingo-line maths sees it
-    var local = state.submissions.filter(function (s) { return s.id === sub.id; })[0];
-    if (local) local.status = 'approved';
+    // ---------- untrusted-input guards ----------
+    // Rows come from other phones. These three values are put into HTML attributes by the
+    // screens, so they are checked here (the database checks them too).
+    // A photo is either an inline image or a link into this project's "proofs" bucket, in
+    // exactly the shape uploadPhoto() produces (<room>/<time>-<random>.jpg). Neither pattern
+    // allows quotes or brackets, so a photo is safe inside src="" and a CSS url().
+    var BUCKET_URL = String(cfg.SUPABASE_URL).replace(/\/+$/, '') + '/storage/v1/object/public/proofs/';
+    function safePhoto(v) {
+      if (typeof v !== 'string') return null;
+      if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]*$/i.test(v)) return v;
+      if (v.indexOf(BUCKET_URL) === 0 && /^[A-Za-z0-9_-]+\/[0-9]+-[a-z0-9]+\.jpg$/.test(v.slice(BUCKET_URL.length))) return v;
+      return null;
+    }
+    function safeColor(v) { return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null; }
+    function safeStatus(v) { return (v === 'approved' || v === 'rejected') ? v : 'pending'; }
+    function safeDay(v) { return SEED.dates[v] ? v : SEED.days[0][0]; }
+    function text(v, n) { return typeof v === 'string' ? v.slice(0, n) : ''; }
 
-    if (sub.kind === 'bingo') {
-      var now = completedLines(sub.teamId), before = state.lines[sub.teamId] || 0;
-      if (now > before) {
-        var bonus = (now - before) * SEED.bingoLine;
-        writes.push({ team_id: sub.teamId, label: 'Bingo line bonus', points: bonus });
-        state.lines[sub.teamId] = now; gained += bonus;
-      }
+    // ---------- row -> state ----------
+    function mapSub(r) {
+      return { id: r.id, teamId: r.team_id, kind: r.kind === 'bingo' ? 'bingo' : 'challenge', refId: r.ref_id,
+        value: r.value, status: safeStatus(r.status), by: r.by, note: r.note, at: r.created_at };
     }
 
-    db.from('submissions').update({ status: 'approved' }).eq('id', sub.id).then(function () {});
-    db.from('ledger').insert(writes).then(function () {
-      Promise.all([loadLedger(), loadSubmissions()]).then(function () {
-        emit({ type: 'approved', points: gained, label: label });
-      });
-    });
-  }
-
-  // ---------- public API (same shape as the demo Store) ----------
-  window.Store = {
-    demo: false,
-    on: function (fn) { listeners.push(fn); },
-    me: function () { return state.me; },
-    myTeam: function () { return state.me ? team(state.me.teamId) : null; },
-    team: team,
-    teams: function () { return state.teams; },
-    points: points,
-    displayName: displayName,
-    ledger: function (teamId) { return state.ledger.filter(function (l) { return l.teamId === teamId; }); },
-    ranking: function () {
-      return state.teams.map(function (t, i) { return { team: t, index: i, points: points(t.id) }; })
-        .sort(function (a, b) { return b.points - a.points; });
-    },
-    findRoom: function (code) {
-      code = String(code || '').trim().toUpperCase();
-      return state.teams.filter(function (t) { return t.code === code; })[0] || null;
-    },
-    signIn: function (teamId, name) { state.me = { teamId: teamId, name: name }; writeJSON(ME_KEY, state.me); emit(); },
-    nameTeam: function (name, color) {
-      var t = this.myTeam(); if (!t) return;
-      t.name = name; t.color = color; emit();
-      db.from('teams').update({ name: name, color: color }).eq('id', t.id).then(function () {});
-    },
-    usedColors: function () {
-      var mine = state.me && state.me.teamId;
-      return state.teams.filter(function (t) { return t.id !== mine; }).map(function (t) { return t.color; });
-    },
-    bingoCard: bingoCard,
-    submissionFor: submissionFor,
-    submissions: function (teamId) { return state.submissions.filter(function (s) { return s.teamId === teamId; }); },
-    submit: function (kind, refId, value, thumb) {
-      var s = { id: 'tmp' + Date.now(), teamId: state.me.teamId, kind: kind, refId: refId,
-        value: value, thumb: thumb, status: 'pending', by: state.me.name };
-      state.submissions.push(s); emit({ type: 'submitted' });        // optimistic
-      db.from('submissions')
-        .insert({ team_id: s.teamId, kind: kind, ref_id: refId, value: value, thumb: thumb,
-          status: 'pending', by: s.by })
-        .select().single()
-        .then(function (res) {
-          if (res.error || !res.data) { console.error('[store] submit failed', res.error); return; }
-          var saved = mapSub(res.data);
-          // replace the optimistic row
-          state.submissions = state.submissions.filter(function (x) { return x.id !== s.id; });
-          state.submissions.push(saved);
-          if (autoApprove) approve(saved); else emit({ type: 'submissions' });
+    // ---------- loaders: each returns the part of the state it refreshes ----------
+    var load = {
+      teams: function () {
+        return db.from('teams').select('*').then(data).then(function (rows) {
+          var byId = {}; rows.forEach(function (r) { byId[r.id] = r; });
+          // the list of rooms (and their order) comes from js/seed.js; the database adds what players chose
+          return { teams: SEED.teams.map(function (seed) {
+            var r = byId[seed.id] || {};
+            return { id: seed.id, code: r.code || seed.code, room: r.room || seed.room,
+              members: Array.isArray(r.members) ? r.members : seed.members,
+              name: r.name ? text(r.name, 40) : null, color: safeColor(r.color) || seed.color, avatar: safePhoto(r.avatar) };
+          }) };
         });
-      return s;
-    },
-    ballot: function (voteId) { return state.ballots[voteId] || null; },
-    vote: function (voteId, teamId) {
-      if (state.ballots[voteId] || teamId === state.me.teamId) return false;
-      state.ballots[voteId] = teamId; emit({ type: 'voted' });       // optimistic
-      db.from('ballots').insert({ vote_id: voteId, voter_id: VOTER, team_id: teamId }).then(function (res) {
-        if (res.error) { delete state.ballots[voteId]; emit({ type: 'ballots' }); }
-      });
-      return true;
-    },
-    // ----- team profile photo -----
-    avatar: function (teamId) { var t = team(teamId); return t ? (t.avatar || null) : null; },
-    setAvatar: function (dataUrl) {
-      var t = this.myTeam(); if (!t) return;
-      t.avatar = dataUrl; emit({ type: 'avatar' });
-      db.from('teams').update({ avatar: dataUrl }).eq('id', t.id).then(function () {});
-    },
-    // Upload a shrunk photo to Storage, return its public URL. Falls back to the
-    // inline data URL if Storage is not set up yet, so the app keeps working.
-    uploadPhoto: function (blob, fallback) {
-      if (!blob) return Promise.resolve(fallback || null);
-      var path = (state.me ? state.me.teamId : 'anon') + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
-      return db.storage.from('proofs').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '3600' })
-        .then(function (res) {
-          if (res.error) throw res.error;
-          var pub = db.storage.from('proofs').getPublicUrl(path);
-          return (pub && pub.data && pub.data.publicUrl) || fallback || null;
-        })
-        .catch(function (e) { console.warn('[store] photo upload failed, keeping inline image', e && e.message); return fallback || null; });
-    },
+      },
+      ledger: function () {
+        return db.from('ledger').select('id, team_id, label, points, submission_id, created_at').then(data).then(function (rows) {
+          return { ledger: rows.map(function (r) {
+            return { id: r.id, teamId: r.team_id, label: r.label, points: +r.points || 0, submissionId: r.submission_id, at: r.created_at };
+          }) };
+        });
+      },
+      submissions: function () {
+        return db.from('submissions').select('id, team_id, kind, ref_id, value, status, by, note, created_at').order('created_at')
+          .then(data).then(function (rows) {
+            var sending = st.submissions.filter(function (s) { return s.sending; });   // proofs still on their way
+            return { submissions: rows.map(mapSub).concat(sending) };
+          });
+      },
+      ballots: function () {
+        return db.from('ballots').select('vote_id, voter_id, team_id').then(data).then(function (rows) {
+          return { ballots: rows.map(function (r) { return { voteId: r.vote_id, voterId: r.voter_id, teamId: r.team_id }; }) };
+        });
+      },
+      events: function () {
+        return db.from('events').select('*').then(data).then(function (rows) {
+          return { events: rows.map(function (r) {
+            return { id: r.id, day: safeDay(r.day), time: r.time, title: r.title, detail: r.detail, position: +r.position || 0, at: r.created_at };
+          }) };
+        });
+      },
+      challenges: function () {
+        return db.from('challenges').select('*').then(data).then(function (rows) {
+          return { challenges: rows.map(function (r) {
+            return { id: r.id, day: safeDay(r.day), kind: r.kind === 'race' ? 'race' : 'mission', title: r.title, desc: r.description,
+              points: +r.points || 0, closes: r.closes, unit: r.unit, prize: r.prize, position: +r.position || 0 };
+          }) };
+        });
+      },
+      players: function () {
+        return db.from('players').select('*').then(data).then(function (rows) {
+          return { players: rows.map(function (r) { return { teamId: r.team_id, name: r.name, joinedAt: r.joined_at, lastSeen: r.last_seen }; }) };
+        });
+      },
+      settings: function () {
+        return db.from('settings').select('key, value').then(data).then(function (rows) {
+          var s = { today: 'auto', message: SEED.message, epoch: 1 };
+          rows.forEach(function (r) { s[r.key] = r.value; });
+          checkEpoch(s.epoch);
+          return { settings: s };
+        });
+      }
+    };
+    var tables = Object.keys(load);
 
-    // ----- feed / team posts -----
-    achievement: achievement,
-    posts: function (teamId) {                     // approved proofs with a photo, newest first
-      return state.submissions
-        .filter(function (s) { return s.status === 'approved' && s.thumb && (!teamId || s.teamId === teamId); })
-        .sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); })
-        .map(function (s) { return { id: s.id, team: team(s.teamId), text: achievement(s), thumb: s.thumb, by: s.by, at: s.createdAt }; });
-    },
-    feed: function () { return this.posts(null); },
-
-    // ----- calendar -----
-    events: function (day) { return state.events.filter(function (e) { return e.day === day; }); },
-
-    // ----- admin back office -----
-    pending: function () {                          // proofs waiting for review, oldest first
-      return state.submissions
-        .filter(function (s) { return s.status === 'pending'; })
-        .sort(function (a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); })
-        .map(function (s) { return { id: s.id, team: team(s.teamId), text: achievement(s),
-          thumb: s.thumb, by: s.by, value: s.value, kind: s.kind, at: s.createdAt }; });
-    },
-    approveSubmission: function (id) {
-      var s = state.submissions.filter(function (x) { return x.id === id; })[0];
-      if (s && s.status === 'pending') approve(s);
-    },
-    rejectSubmission: function (id) {
-      db.from('submissions').update({ status: 'rejected' }).eq('id', id)
-        .then(function () { loadSubmissions().then(function () { emit({ type: 'submissions' }); }); });
-    },
-    addEvent: function (ev) {
-      return db.from('events').insert({ day: ev.day, time: ev.time || '', title: ev.title, detail: ev.detail || '' })
-        .then(function () { return loadEvents(); }).then(function () { emit({ type: 'events' }); });
-    },
-    deleteEvent: function (id) {
-      return db.from('events').delete().eq('id', id)
-        .then(function () { return loadEvents(); }).then(function () { emit({ type: 'events' }); });
-    },
-
-    // In the shared app, "reset" just signs this phone out. It never wipes the DB.
-    reset: function () {
-      state.me = null; try { localStorage.removeItem(ME_KEY); } catch (e) {}
-      emit({ type: 'reset' });
+    // The organisers restarted the game: the epoch changed, so this phone signs itself out.
+    function checkEpoch(epoch) {
+      var known = null;
+      try { known = localStorage.getItem(EPOCH_KEY); } catch (e) {}
+      if (known !== null && known !== String(epoch) && st.me) { ctx.signOutLocal(); setTimeout(function () { ctx.emit({ type: 'me' }); }, 0); }
+      try { localStorage.setItem(EPOCH_KEY, String(epoch)); } catch (e) {}
     }
-  };
 
-  init();
+    function refresh(names) {
+      return Promise.all(names.map(function (n) { return load[n](); })).then(function (parts) {
+        var patch = {};
+        parts.forEach(function (p) { for (var k in p) patch[k] = p[k]; });
+        ctx.set(patch, names.length === 1 ? names[0] : 'data');
+        return true;
+      });
+    }
+    // a burst of changes on one table (a restart deletes many rows) becomes one reload
+    var timers = {};
+    function refreshSoon(name) {
+      clearTimeout(timers[name]);
+      timers[name] = setTimeout(function () { refresh([name]).catch(function (e) { console.error('[store] reload ' + name, e); }); }, 150);
+    }
+
+    // Create the rooms the first time the app runs against an empty project.
+    // Existing rows are left alone, so nothing a team chose is ever overwritten.
+    function seedTeams() {
+      var rows = SEED.teams.map(function (t) { return { id: t.id, code: t.code, room: t.room, members: t.members, name: null, color: t.color }; });
+      return db.from('teams').upsert(rows, { onConflict: 'id', ignoreDuplicates: true }).then(function (res) {
+        if (res.error) console.warn('[store] could not create the rooms', res.error);
+      });
+    }
+
+    // ---------- organiser session ----------
+    function setAdmin(status, email) { ctx.set({ admin: { status: status, email: email || '' } }, 'admin'); }
+    function checkAdmin(session) {
+      if (!session || !session.user) { setAdmin('out'); return Promise.resolve(false); }
+      return db.rpc('is_admin').then(function (res) {
+        var yes = !res.error && res.data === true;
+        setAdmin(yes ? 'in' : 'denied', session.user.email);
+        return yes;
+      });
+    }
+
+    return {
+      voterId: function () { return VOTER; },
+
+      init: function () {
+        seedTeams()
+          .then(function () { return refresh(tables); })
+          .then(function () { ctx.set({ ready: true }, 'ready'); })
+          .catch(function (e) {
+            console.error('[store] first load failed', e);
+            ctx.set({ ready: true }, 'ready');
+            ctx.emit({ type: 'error', message: 'Could not reach the server. Check your connection and reload.' });
+          });
+
+        var ch = db.channel('skitrip');
+        tables.forEach(function (name) {
+          ch.on('postgres_changes', { event: '*', schema: 'public', table: name }, function () { refreshSoon(name); });
+        });
+        ch.subscribe();
+
+        // a phone coming back from sleep may have missed live changes
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') refresh(tables).catch(function () {});
+        });
+
+        db.auth.getSession().then(function (res) { return checkAdmin(res.data && res.data.session); })
+          .catch(function () { setAdmin('out'); });
+        db.auth.onAuthStateChange(function (event, session) {
+          // never call Supabase from inside this callback: defer it
+          if (event === 'SIGNED_OUT') setTimeout(function () { setAdmin('out'); }, 0);
+        });
+      },
+
+      // ---------- players ----------
+      seen: function (teamId, name) {
+        return db.rpc('player_seen', { p_team: teamId, p_name: name }).then(data);
+      },
+      updateTeam: function (teamId, patch) {
+        return db.from('teams').update(patch).eq('id', teamId).then(data).then(function () { return refresh(['teams']); });
+      },
+      submit: function (tmp, photo) {
+        return db.rpc('submit_proof', { p_team: tmp.teamId, p_kind: tmp.kind, p_ref: tmp.refId, p_value: tmp.value || '', p_by: tmp.by, p_photo: photo })
+          .then(data).then(function (row) {
+            var saved = mapSub(row);
+            ctx.photos[saved.id] = photo;
+            var list = st.submissions.filter(function (s) { return s.id !== tmp.id && s.id !== saved.id; });
+            list.push(saved);
+            ctx.set({ submissions: list }, 'submissions');
+            return saved;
+          });
+      },
+      // Upload a photo to the public "proofs" bucket and return its link.
+      uploadPhoto: function (blob, folder) {
+        if (!db.storage) return Promise.resolve(null);
+        var path = String(folder).replace(/[^A-Za-z0-9_-]/g, '') + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+        return db.storage.from('proofs').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' }).then(function (res) {
+          if (res.error) throw res.error;
+          var url = db.storage.from('proofs').getPublicUrl(path).data.publicUrl;
+          return safePhoto(url);
+        });
+      },
+      loadPhotos: function (ids) {
+        ids = ids.filter(function (id) { return String(id).indexOf('tmp-') !== 0; });
+        if (!ids.length) return Promise.resolve({});
+        return db.from('submission_photos').select('submission_id, data').in('submission_id', ids).then(data).then(function (rows) {
+          var map = {};
+          rows.forEach(function (r) { var p = safePhoto(r.data); if (p) map[r.submission_id] = p; });
+          return map;
+        });
+      },
+      vote: function (voteId, teamId) {
+        return db.from('ballots').insert({ vote_id: voteId, voter_id: VOTER, team_id: teamId }).then(function (res) {
+          if (res.error) { refreshSoon('ballots'); throw res.error; }
+          return true;
+        });
+      },
+
+      // ---------- organisers ----------
+      adminLogin: function (email, password) {
+        return db.auth.signInWithPassword({ email: email, password: password }).then(function (res) {
+          if (res.error) throw res.error;
+          return checkAdmin(res.data.session);
+        });
+      },
+      adminLogout: function () { return db.auth.signOut().then(function () { setAdmin('out'); return true; }); },
+
+      approve: function (id, awards) {
+        return db.rpc('approve_submission', { p_id: id, p_awards: awards }).then(data)
+          .then(function (ok) { return refresh(['submissions', 'ledger']).then(function () { return ok === true; }); });
+      },
+      reject: function (id, note) {
+        return db.rpc('reject_submission', { p_id: id, p_note: note }).then(data)
+          .then(function (ok) { return refresh(['submissions']).then(function () { return ok === true; }); });
+      },
+      reopen: function (id) {
+        return db.rpc('reopen_submission', { p_id: id }).then(data)
+          .then(function (ok) { return refresh(['submissions', 'ledger']).then(function () { return ok === true; }); });
+      },
+      award: function (teamId, label, pts) {
+        return db.from('ledger').insert({ team_id: teamId, label: label, points: pts }).then(data)
+          .then(function () { return refresh(['ledger']); });
+      },
+      removeLedger: function (id) {
+        return db.from('ledger').delete().eq('id', id).then(data).then(function () { return refresh(['ledger']); });
+      },
+      saveChallenge: function (c) {
+        var row = {};
+        ['day', 'kind', 'title', 'points', 'closes', 'unit', 'prize', 'position'].forEach(function (k) { if (c[k] != null) row[k] = c[k]; });
+        if (c.desc != null) row.description = c.desc;
+        var q;
+        if (c.id) q = db.from('challenges').update(row).eq('id', c.id);
+        else {
+          if (row.position == null) row.position = st.challenges.reduce(function (m, x) { return Math.max(m, x.position); }, 0) + 10;
+          q = db.from('challenges').insert(row);
+        }
+        return q.then(data).then(function () { return refresh(['challenges']); });
+      },
+      deleteChallenge: function (id) {
+        return db.from('challenges').delete().eq('id', id).then(data).then(function () { return refresh(['challenges']); });
+      },
+      saveEvent: function (e) {
+        var row = {};
+        ['day', 'time', 'title', 'detail', 'position'].forEach(function (k) { if (e[k] != null) row[k] = e[k]; });
+        var q = e.id ? db.from('events').update(row).eq('id', e.id) : db.from('events').insert(row);
+        return q.then(data).then(function () { return refresh(['events']); });
+      },
+      deleteEvent: function (id) {
+        return db.from('events').delete().eq('id', id).then(data).then(function () { return refresh(['events']); });
+      },
+      setSetting: function (key, value) {
+        return db.from('settings').upsert({ key: key, value: value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+          .then(data).then(function () { return refresh(['settings']); });
+      },
+      restart: function () {
+        return db.rpc('reset_game').then(data).then(function () { return refresh(tables); });
+      }
+    };
+  };
 })();
