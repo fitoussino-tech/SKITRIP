@@ -226,7 +226,9 @@
         var cv = document.createElement('canvas');
         cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
         cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        done(cv.toDataURL('image/jpeg', 0.72));
+        var inline = cv.toDataURL('image/jpeg', 0.72);
+        if (cv.toBlob) cv.toBlob(function (blob) { done(inline, blob); }, 'image/jpeg', 0.72);
+        else done(inline, null);
       };
       img.onerror = function () { done(null); };
       img.src = reader.result;
@@ -242,9 +244,9 @@
     g.fillStyle = '#FFC933'; g.beginPath(); g.arc(262, 48, 22, 0, 7); g.fill();
     return cv.toDataURL('image/jpeg', 0.72);
   }
-  function setPhoto(dataUrl) {
+  function setPhoto(dataUrl, blob) {
     if (!draft) return;
-    draft.thumb = dataUrl;
+    draft.thumb = dataUrl; draft.blob = blob || null;
     var box = $('#photo-box');
     if (box && dataUrl) { box.style.backgroundImage = 'url(' + dataUrl + ')'; box.classList.add('has'); $('#photo-label').textContent = 'Change photo'; }
     if (!dataUrl) $('#sub-error').textContent = 'That file could not be read. Try another photo.';
@@ -328,7 +330,10 @@
       }
       if (!draft.thumb) { $('#sub-error').textContent = 'Add a photo as proof first.'; return; }
       var d = draft; closeSheet();
-      Store.submit(d.kind, d.refId, value, d.thumb).then(function (ok) {
+      if (d.blob) toast('<b>Sending…</b> uploading your photo.', 'wave');
+      Store.uploadPhoto(d.blob, d.thumb).then(function (photo) {
+        return Store.submit(d.kind, d.refId, value, photo);
+      }).then(function (ok) {
         if (ok) toast('<b>Sent!</b> The jury is having a look.', 'wave');
       });
     },
@@ -368,8 +373,11 @@
   });
   document.addEventListener('change', function (e) {
     if (e.target.id === 'sub-photo' && e.target.files[0]) shrink(e.target.files[0], Store.demo ? 640 : 1280, setPhoto);
-    if (e.target.id === 'team-photo' && e.target.files[0]) shrink(e.target.files[0], 256, function (d) {
-      if (d) { Store.setAvatar(d); toast('<b>Nice!</b> Team photo set.', 'celebrate'); }
+    if (e.target.id === 'team-photo' && e.target.files[0]) shrink(e.target.files[0], 256, function (d, blob) {
+      if (!d) return;
+      Store.uploadPhoto(blob, d).then(function (photo) {
+        if (photo) { Store.setAvatar(photo); toast('<b>Nice!</b> Team photo set.', 'celebrate'); }
+      });
     });
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheetEl.hidden) closeSheet(); });

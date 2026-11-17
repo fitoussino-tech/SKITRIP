@@ -6,7 +6,8 @@
 --   1. Organiser accounts (Supabase Auth users listed in `admins`).
 --   2. New tables: players (who has joined), settings, challenges, submission_photos.
 --   3. The whole programme moves into `events`, so every line is editable.
---   4. Photos leave the `submissions` rows (they made every phone re-download every photo).
+--   4. Photos leave the `submissions` rows (they made every phone re-download every photo)
+--      and are uploaded to the "proofs" Storage bucket; only the link is kept.
 --   5. Access rules: players can read, join, send proofs, vote and edit a team's
 --      name / colour / photo. Only organisers can approve, award points or edit content.
 --   6. Functions the app calls (send a proof, approve, reject, undo, restart).
@@ -86,10 +87,22 @@ select * from (values
 where not exists (select 1 from challenges);
 
 -- Proof photos live in their own table, outside Realtime, and are fetched one by one.
+-- `data` is a link into the "proofs" Storage bucket, or an inline image (demo / failed upload).
 create table if not exists submission_photos (
   submission_id uuid primary key references submissions(id) on delete cascade,
-  data          text not null check (data ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,')
+  data          text not null
 );
+
+-- What counts as a photo: an inline image, or a link to a file in the "proofs" bucket.
+-- The patterns leave out quotes and brackets, so a stored photo can never break the page.
+create or replace function is_photo(v text) returns boolean
+language sql immutable set search_path = public as $$
+  select v ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]*$'
+      or v ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/proofs/[A-Za-z0-9_-]+/[A-Za-z0-9._-]+$'
+$$;
+alter table submission_photos drop constraint if exists submission_photos_data_check;
+alter table submission_photos drop constraint if exists submission_photos_data_ok;
+alter table submission_photos add constraint submission_photos_data_ok check (is_photo(data));
 
 -- ====================================================================
 -- 3. Changes to existing tables
@@ -122,6 +135,22 @@ begin
     alter table teams add constraint teams_avatar_len check (avatar is null or char_length(avatar) <= 200000);
   end if;
 end $$;
+alter table teams drop constraint if exists teams_avatar_check;
+alter table teams drop constraint if exists teams_avatar_ok;
+alter table teams add constraint teams_avatar_ok check (avatar is null or is_photo(avatar));
+
+-- Photo storage: a public "proofs" bucket. Players may upload images (3 MB max) into a
+-- folder named after their room, never overwrite or delete. Reading is by public link.
+insert into storage.buckets (id, name, public) values ('proofs', 'proofs', true) on conflict (id) do nothing;
+update storage.buckets
+   set public = true, file_size_limit = 3145728, allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp']
+ where id = 'proofs';
+drop policy if exists "proofs read"   on storage.objects;
+drop policy if exists "proofs write"  on storage.objects;
+drop policy if exists "proofs upload" on storage.objects;
+create policy "proofs read"   on storage.objects for select using (bucket_id = 'proofs');
+create policy "proofs upload" on storage.objects for insert to anon, authenticated
+  with check (bucket_id = 'proofs' and name ~ '^[A-Za-z0-9_-]+/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$');
 
 -- events: the whole programme now lives here, in an order the organisers control.
 alter table events add column if not exists position int not null default 0;
@@ -260,11 +289,7 @@ declare v submissions;
 begin
   if p_kind not in ('challenge', 'bingo') then raise exception 'Unknown kind of proof'; end if;
   if not exists (select 1 from teams where id = p_team) then raise exception 'Unknown team'; end if;
-  if p_photo is null
-     or p_photo !~ '^data:image/(png|jpeg|jpg|webp|gif);base64,'
-     or p_photo ~ '[^A-Za-z0-9+/=:;,]' then
-    raise exception 'A photo is required';
-  end if;
+  if p_photo is null or not is_photo(p_photo) then raise exception 'A photo is required'; end if;
   if char_length(p_photo) > 1500000 then raise exception 'That photo is too large'; end if;
 
   select * into v from submissions

@@ -284,3 +284,6 @@ a.link { text-decoration: underline; }
 .gphoto { position: relative; aspect-ratio: 1; border: 2.5px solid #fff; border-radius: 14px 10px 13px 9px; background: #0b1230 center / cover no-repeat; overflow: hidden; }
 .gphoto span { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 7px 5px; font: 600 10px/1.2 var(--body);
   background: linear-gradient(transparent, rgba(5, 9, 24, .88)); }
+
+/* ---------- Mobile app shell (notch / status bar, when installed on the home screen) ---------- */
+#app { padding-top: calc(18px + env(safe-area-inset-top)); }

@@ -30,8 +30,14 @@
     // ---------- untrusted-input guards ----------
     // Rows come from other phones. These three values are put into HTML attributes by the
     // screens, so they are checked here (the database checks them too).
+    // A photo is either an inline image or a link into this project's "proofs" bucket.
+    // Both patterns leave out quotes and brackets, so they are safe inside src="" and url().
+    var BUCKET_URL = String(cfg.SUPABASE_URL).replace(/\/+$/, '') + '/storage/v1/object/public/proofs/';
     function safePhoto(v) {
-      return (typeof v === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]*$/i.test(v)) ? v : null;
+      if (typeof v !== 'string') return null;
+      if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]*$/i.test(v)) return v;
+      if (v.indexOf(BUCKET_URL) === 0 && /^[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(v.slice(BUCKET_URL.length))) return v;
+      return null;
     }
     function safeColor(v) { return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null; }
     function safeStatus(v) { return (v === 'approved' || v === 'rejected') ? v : 'pending'; }
@@ -200,6 +206,16 @@
             ctx.set({ submissions: list }, 'submissions');
             return saved;
           });
+      },
+      // Upload a photo to the public "proofs" bucket and return its link.
+      uploadPhoto: function (blob, folder) {
+        if (!db.storage) return Promise.resolve(null);
+        var path = String(folder).replace(/[^A-Za-z0-9_-]/g, '') + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+        return db.storage.from('proofs').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' }).then(function (res) {
+          if (res.error) throw res.error;
+          var url = db.storage.from('proofs').getPublicUrl(path).data.publicUrl;
+          return safePhoto(url);
+        });
       },
       loadPhotos: function (ids) {
         ids = ids.filter(function (id) { return String(id).indexOf('tmp-') !== 0; });

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ski Trip">
+  <rect width="512" height="512" rx="110" fill="#0E1530"/>
+  <circle cx="378" cy="138" r="30" fill="#FFE9A8"/>
+  <g fill="#fff"><circle cx="120" cy="120" r="4"/><circle cx="200" cy="90" r="3"/><circle cx="300" cy="110" r="3"/><circle cx="430" cy="230" r="3.5"/></g>
+  <path d="M28 438 L150 258 L214 338 L300 196 L384 320 L484 438 Z" fill="#1B2857" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M300 196 L262 258 L280 272 L300 240 L322 272 L338 258 Z" fill="#F2F6FF" stroke="#fff" stroke-width="9" stroke-linejoin="round"/>
+  <rect x="28" y="438" width="456" height="46" fill="#F2F6FF"/>
+</svg>

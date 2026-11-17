@@ -262,6 +262,13 @@
     bingoCard: bingoCard,
     submissionFor: submissionFor,
     achievement: achievement,
+    // Put a photo somewhere shareable and return what to store: a Supabase Storage link,
+    // or the inline image itself (demo, or when the upload fails).
+    uploadPhoto: function (blob, inline) {
+      if (!blob || !backend.uploadPhoto) return Promise.resolve(inline || null);
+      return backend.uploadPhoto(blob, state.me ? state.me.teamId : 'anon').then(function (url) { return url || inline || null; },
+        function (e) { console.warn('[store] photo upload failed, keeping the inline image', e && e.message); return inline || null; });
+    },
     submit: function (kind, refId, value, photo) {
       var tmp = { id: 'tmp-' + Date.now(), teamId: state.me.teamId, kind: kind, refId: refId, value: value || null,
         status: 'pending', by: state.me.name, note: null, at: new Date().toISOString(), sending: true };

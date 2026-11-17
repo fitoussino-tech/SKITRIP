@@ -1,7 +1,7 @@
 /* Back office. Reuses the colours, buttons, fields and chips of style.css,
    laid out for a laptop as well as a phone. */
 body.admin { background: var(--navy); }
-#admin { max-width: 1120px; margin: 0 auto; padding: 0 16px 80px; }
+#admin { max-width: 1120px; margin: 0 auto; padding: env(safe-area-inset-top) 16px calc(80px + env(safe-area-inset-bottom)); }
 .admin h1 { font-size: 34px; text-align: left; margin: 4px 0 14px; }
 .admin h2 { font-size: 22px; margin: 0 0 10px; }
 .admin h2 span { display: inline; margin-left: 8px; font-size: 13px; }
@@ -25,7 +25,7 @@ body.gated #admin { max-width: 420px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 8px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 6px; } .brand .mascot { width: 58px; } .brand b { font: 400 26px var(--hand); }
 .top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; margin-bottom: 14px; border-bottom: 3px solid #fff; scrollbar-width: none; position: sticky; top: 0; background: var(--navy); z-index: 4; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding: max(4px, env(safe-area-inset-top)) 0 10px; margin-bottom: 14px; border-bottom: 3px solid #fff; scrollbar-width: none; position: sticky; top: 0; background: var(--navy); z-index: 4; }
 .tabs a { flex: 0 0 auto; padding: 7px 14px; font: 400 19px var(--hand); color: #D5DCF7; text-decoration: none; border-radius: 99px; border: 2.5px solid transparent; }
 .tabs a.on { background: var(--sun); color: var(--navy); border-color: #fff; }
 .tabs a i, .seg i { font: 800 12px var(--body); font-style: normal; padding: 1px 7px; border-radius: 99px; background: var(--red); color: #fff; vertical-align: 2px; }
