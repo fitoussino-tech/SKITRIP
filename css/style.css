@@ -270,3 +270,23 @@ body { position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; }
   max-width: 480px; margin: 0 auto;
   padding: calc(18px + env(safe-area-inset-top)) 16px calc(104px + env(safe-area-inset-bottom));
 }
+
+/* ---------- Salamander 2.5D: volume + tilt toward you ---------- */
+.hero, .mascot-btn { position: relative; }
+.hero .mascot, .mascot-btn .mascot {
+  transform: perspective(760px) rotateX(var(--mrx, 0deg)) rotateY(var(--mry, 0deg));
+  transform-origin: center 66%;
+  transition: transform .12s ease-out;
+  filter: drop-shadow(0 12px 12px rgba(5, 9, 24, .5));
+  will-change: transform;
+}
+.hero::after {
+  content: ''; position: absolute; left: 50%; bottom: 4%; z-index: -1;
+  width: 44%; height: 18px; border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(5, 9, 24, .6), transparent 72%);
+  filter: blur(3px);
+  transform: translateX(-50%) translateX(var(--shx, 0px));
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero .mascot, .mascot-btn .mascot { transform: none; transition: none; }
+}
