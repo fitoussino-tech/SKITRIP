@@ -139,6 +139,15 @@
     },
     avatar: function (teamId) { var t = team(teamId); return t ? (t.avatar || null) : null; },
     setAvatar: function (dataUrl) { var t = this.myTeam(); if (!t) return; t.avatar = dataUrl; emit({ type: 'avatar' }); },
+    uploadPhoto: function (blob, fallback) {
+      return new Promise(function (resolve) {
+        if (!blob) return resolve(fallback || null);
+        var r = new FileReader();
+        r.onload = function () { resolve(r.result); };
+        r.onerror = function () { resolve(fallback || null); };
+        r.readAsDataURL(blob);
+      });
+    },
     achievement: achievement,
     posts: function (teamId) {
       return state.submissions

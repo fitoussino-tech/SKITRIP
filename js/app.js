@@ -211,7 +211,9 @@
         var cv = document.createElement('canvas');
         cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
         cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        done(cv.toDataURL('image/jpeg', 0.72));
+        var preview = cv.toDataURL('image/jpeg', 0.72);
+        if (cv.toBlob) cv.toBlob(function (blob) { done({ blob: blob, preview: preview }); }, 'image/jpeg', 0.72);
+        else done({ blob: null, preview: preview });
       };
       img.onerror = function () { done(null); };
       img.src = reader.result;
@@ -283,8 +285,11 @@
       }
       if (!draft.thumb) { $('#sub-error').textContent = 'Add a photo as proof first.'; return; }
       var d = draft; closeSheet();
-      Store.submit(d.kind, d.refId, value, d.thumb);
-      toast('<b>Sent!</b> The jury is having a look.', 'wave');
+      toast('<b>Sending…</b> uploading your photo.', 'wave');
+      Store.uploadPhoto(d.blob, d.thumb).then(function (url) {
+        Store.submit(d.kind, d.refId, value, url || d.thumb);
+        toast('<b>Sent!</b> The jury is having a look.', 'wave');
+      });
     },
     'cast-vote': function (el) {
       var t = Store.team(el.getAttribute('data-id'));
@@ -321,9 +326,16 @@
     if (e.target.id === 'sub-value') $('#sub-error').textContent = '';
   });
   document.addEventListener('change', function (e) {
-    if (e.target.id === 'sub-photo' && e.target.files[0]) shrink(e.target.files[0], Store.demo ? 480 : 1280, setPhoto);
-    if (e.target.id === 'team-photo' && e.target.files[0]) shrink(e.target.files[0], 256, function (d) {
-      if (d) { Store.setAvatar(d); toast('<b>Nice!</b> Team photo set.', 'celebrate'); }
+    if (e.target.id === 'sub-photo' && e.target.files[0]) shrink(e.target.files[0], 1280, function (r) {
+      if (!r) { setPhoto(null); return; }
+      draft.blob = r.blob; setPhoto(r.preview);
+    });
+    if (e.target.id === 'team-photo' && e.target.files[0]) shrink(e.target.files[0], 256, function (r) {
+      if (!r || !r.preview) return;
+      toast('<b>Uploading…</b>', 'wave');
+      Store.uploadPhoto(r.blob, r.preview).then(function (url) {
+        if (url) { Store.setAvatar(url); toast('<b>Nice!</b> Team photo set.', 'celebrate'); }
+      });
     });
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheetEl.hidden) closeSheet(); });

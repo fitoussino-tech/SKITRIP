@@ -14,6 +14,7 @@
 
   var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   var autoApprove = cfg.AUTO_APPROVE !== false;
+  var STORAGE_PREFIX = String(cfg.SUPABASE_URL).replace(/\/+$/, '') + '/storage/v1/object/public/';
 
   var ME_KEY = 'mim28-me-v1';
   var DEVICE_KEY = 'mim28-device-v1';
@@ -85,7 +86,10 @@
   // Everything else app.js renders through esc(). This blocks stored XSS at the
   // boundary; the DB adds CHECK constraints as a second layer (see schema.sql).
   function safeThumb(v) {
-    return (typeof v === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]*$/i.test(v)) ? v : null;
+    if (typeof v !== 'string') return null;
+    if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]*$/i.test(v)) return v;                 // inline (legacy)
+    if (v.indexOf(STORAGE_PREFIX) === 0 && /^[A-Za-z0-9._~:\/?#\[\]@!$&'()*+,;=%-]+$/.test(v)) return v;    // our Storage URL
+    return null;
   }
   function safeColor(v) {
     return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null;
@@ -291,6 +295,19 @@
       var t = this.myTeam(); if (!t) return;
       t.avatar = dataUrl; emit({ type: 'avatar' });
       db.from('teams').update({ avatar: dataUrl }).eq('id', t.id).then(function () {});
+    },
+    // Upload a shrunk photo to Storage, return its public URL. Falls back to the
+    // inline data URL if Storage is not set up yet, so the app keeps working.
+    uploadPhoto: function (blob, fallback) {
+      if (!blob) return Promise.resolve(fallback || null);
+      var path = (state.me ? state.me.teamId : 'anon') + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+      return db.storage.from('proofs').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '3600' })
+        .then(function (res) {
+          if (res.error) throw res.error;
+          var pub = db.storage.from('proofs').getPublicUrl(path);
+          return (pub && pub.data && pub.data.publicUrl) || fallback || null;
+        })
+        .catch(function (e) { console.warn('[store] photo upload failed, keeping inline image', e && e.message); return fallback || null; });
     },
 
     // ----- feed / team posts -----

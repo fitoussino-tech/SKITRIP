@@ -1,0 +1,15 @@
+{
+  "name": "MIM28 Ski Trip",
+  "short_name": "Ski Trip",
+  "description": "The INSEAD MiM28 ski trip app: daily challenges, bingo, feed and the leaderboard mountain.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1530",
+  "theme_color": "#0E1530",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
