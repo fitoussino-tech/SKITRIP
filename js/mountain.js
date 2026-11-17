@@ -1,9 +1,9 @@
 // The leaderboard mountain: one alpinist per team, altitude = points.
 (function () {
-  var TOP = 78, BASE = 452, PEAK_X = 180, GAP = 25;
+  var TOP = 78, BASE = 452, PEAK_X = 180, GAP = 27, FIELD = 0.66;
   var last = {};                                       // team id -> where its alpinist was last drawn
 
-  function halfWidth(y) { return (y - 52) / 420 * 160 * 0.55; }   // usable half-width of the mountain at this height
+  function halfWidth(y) { return (y - 52) / 420 * 160 * FIELD; }   // usable half-width of the mountain at this height
 
   // Where a team stands for a given share of the summit score (0 = chalet, 1 = summit).
   function spot(index, share) {
@@ -37,7 +37,7 @@
         }
       }
       pts.forEach(function (p) {                       // stay on the mountain
-        var half = Math.max(halfWidth(p.y) / 0.55 * 0.82, 6);
+        var half = Math.max(halfWidth(p.y) / FIELD * 0.82, 6);
         p.y = Math.max(TOP, Math.min(BASE, p.y));
         p.x = Math.max(PEAK_X - half, Math.min(PEAK_X + half, p.x));
       });
