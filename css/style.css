@@ -256,3 +256,17 @@ body { background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 48%, va
 /* ---------- Mobile app shell (notch / status bar) ---------- */
 #app { padding-top: calc(18px + env(safe-area-inset-top)); }
 #admin { padding-top: calc(18px + env(safe-area-inset-top)); }
+
+/* ---------- Fixed app shell: the page never scrolls, only the content area does,
+   so the winter backdrop stays locked to the screen (no rubber-band, no vh jumps). ---------- */
+html, body { height: 100%; }
+body { position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; }
+#app {
+  position: fixed; inset: 0; z-index: 1;
+  max-width: none; min-height: 0; margin: 0; padding: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+#app > section {
+  max-width: 480px; margin: 0 auto;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(104px + env(safe-area-inset-bottom));
+}
