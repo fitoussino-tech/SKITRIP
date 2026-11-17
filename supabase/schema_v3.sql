@@ -345,6 +345,11 @@ grant execute on function approve_submission(uuid, jsonb)                    to 
 grant execute on function reject_submission(uuid, text)                      to authenticated;
 grant execute on function reopen_submission(uuid)                            to authenticated;
 grant execute on function reset_game()                                       to authenticated;
+-- Organiser-only functions: not callable at all without signing in (they also check is_admin() inside).
+revoke execute on function approve_submission(uuid, jsonb) from public, anon;
+revoke execute on function reject_submission(uuid, text)   from public, anon;
+revoke execute on function reopen_submission(uuid)         from public, anon;
+revoke execute on function reset_game()                    from public, anon;
 
 -- ====================================================================
 -- Still open on purpose (players have no accounts, only a room code + name):
