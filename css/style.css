@@ -286,4 +286,18 @@ a.link { text-decoration: underline; }
   background: linear-gradient(transparent, rgba(5, 9, 24, .88)); }
 
 /* ---------- Mobile app shell (notch / status bar, when installed on the home screen) ---------- */
-#app { padding-top: calc(18px + env(safe-area-inset-top)); }
+/* Fixed shell for the player app: the page never scrolls, only #app does, so the winter
+   backdrop stays locked to the screen (no rubber-band bounce, no URL-bar jumps).
+   The back office (body.admin) keeps normal page scrolling. */
+html, body { height: 100%; }
+body:not(.admin) { position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; }
+body:not(.admin) #app {
+  position: fixed; inset: 0; z-index: 1;
+  max-width: none; min-height: 0; margin: 0; padding: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+body:not(.admin) #app > section {
+  max-width: 480px; margin: 0 auto;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(104px + env(safe-area-inset-bottom));
+}
+body.welcome:not(.admin) #app > section { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }

@@ -30,13 +30,14 @@
     // ---------- untrusted-input guards ----------
     // Rows come from other phones. These three values are put into HTML attributes by the
     // screens, so they are checked here (the database checks them too).
-    // A photo is either an inline image or a link into this project's "proofs" bucket.
-    // Both patterns leave out quotes and brackets, so they are safe inside src="" and url().
+    // A photo is either an inline image or a link into this project's "proofs" bucket, in
+    // exactly the shape uploadPhoto() produces (<room>/<time>-<random>.jpg). Neither pattern
+    // allows quotes or brackets, so a photo is safe inside src="" and a CSS url().
     var BUCKET_URL = String(cfg.SUPABASE_URL).replace(/\/+$/, '') + '/storage/v1/object/public/proofs/';
     function safePhoto(v) {
       if (typeof v !== 'string') return null;
       if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]*$/i.test(v)) return v;
-      if (v.indexOf(BUCKET_URL) === 0 && /^[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(v.slice(BUCKET_URL.length))) return v;
+      if (v.indexOf(BUCKET_URL) === 0 && /^[A-Za-z0-9_-]+\/[0-9]+-[a-z0-9]+\.jpg$/.test(v.slice(BUCKET_URL.length))) return v;
       return null;
     }
     function safeColor(v) { return (typeof v === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(v)) ? v : null; }

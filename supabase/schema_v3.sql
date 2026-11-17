@@ -98,7 +98,7 @@ create table if not exists submission_photos (
 create or replace function is_photo(v text) returns boolean
 language sql immutable set search_path = public as $$
   select v ~ '^data:image/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]*$'
-      or v ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/proofs/[A-Za-z0-9_-]+/[A-Za-z0-9._-]+$'
+      or v ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/proofs/[A-Za-z0-9_-]+/[0-9]+-[a-z0-9]+\.jpg$'
 $$;
 alter table submission_photos drop constraint if exists submission_photos_data_check;
 alter table submission_photos drop constraint if exists submission_photos_data_ok;
@@ -139,18 +139,18 @@ alter table teams drop constraint if exists teams_avatar_check;
 alter table teams drop constraint if exists teams_avatar_ok;
 alter table teams add constraint teams_avatar_ok check (avatar is null or is_photo(avatar));
 
--- Photo storage: a public "proofs" bucket. Players may upload images (3 MB max) into a
+-- Photo storage: a public "proofs" bucket. Players may upload JPEG photos (3 MB max) into a
 -- folder named after their room, never overwrite or delete. Reading is by public link.
 insert into storage.buckets (id, name, public) values ('proofs', 'proofs', true) on conflict (id) do nothing;
 update storage.buckets
-   set public = true, file_size_limit = 3145728, allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp']
+   set public = true, file_size_limit = 3145728, allowed_mime_types = array['image/jpeg']
  where id = 'proofs';
 drop policy if exists "proofs read"   on storage.objects;
 drop policy if exists "proofs write"  on storage.objects;
 drop policy if exists "proofs upload" on storage.objects;
 create policy "proofs read"   on storage.objects for select using (bucket_id = 'proofs');
 create policy "proofs upload" on storage.objects for insert to anon, authenticated
-  with check (bucket_id = 'proofs' and name ~ '^[A-Za-z0-9_-]+/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$');
+  with check (bucket_id = 'proofs' and name ~ '^[A-Za-z0-9_-]+/[0-9]+-[a-z0-9]+\.jpg$');
 
 -- events: the whole programme now lives here, in an order the organisers control.
 alter table events add column if not exists position int not null default 0;

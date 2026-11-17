@@ -381,7 +381,7 @@
     });
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheetEl.hidden) closeSheet(); });
-  window.addEventListener('hashchange', function () { window.scrollTo(0, 0); render(); });
+  window.addEventListener('hashchange', function () { app.scrollTop = 0; window.scrollTo(0, 0); render(); });
 
   Store.on(function (evt) {
     if (evt.type === 'approved') toast('<b>' + (evt.points ? '+' + evt.points + ' points!' : 'Approved!') + '</b> ' + esc(evt.label), 'celebrate');
