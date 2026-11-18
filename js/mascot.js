@@ -2,7 +2,8 @@
 // movement is done in CSS (see "Mascot" in style.css).
 // Poses: idle, wave, celebrate, dance.
 (function () {
-  var W = 'stroke="#fff"', G = '#3DBE6B', G2 = '#2FA85A';
+  // outline colour follows the time of day (.mascot { color } in style.css)
+  var W = 'stroke="currentColor"', G = '#3DBE6B', G2 = '#2FA85A';
   var body =
     '<g class="m-all"><g transform="rotate(-5 340 300)" stroke-linecap="round" stroke-linejoin="round">' +
     // far ski, boot and leg

@@ -260,6 +260,26 @@
     if (toastQueue.length === 1) { clearTimeout(toastNext); toastNext = setTimeout(function () { showToast(toastQueue.shift()); }, wait); }
   }
 
+  // ---------- Time of day ----------
+  // The whole app follows the phone's clock: morning 06-11, day 11-16, golden 16-19, night 19-06
+  // (?time=morning|day|golden|night previews one). The palettes live at the end of css/style.css.
+  var BAR = { morning: '#F7EEF4', day: '#EEF4FC', golden: '#2B1734', night: '#0B0820' }, shownTime = null;
+  function applyTime() {
+    var t = Mountain.period();
+    if (t === shownTime) return;
+    shownTime = t;
+    document.body.setAttribute('data-time', t);
+    var bar = document.querySelector('meta[name="theme-color"]');
+    if (bar) bar.setAttribute('content', BAR[t]);
+  }
+  // check once a minute; when the period changes, redraw (the mountain re-draws its own light)
+  setInterval(function () {
+    var before = shownTime;
+    if (Mountain.period() === before) return;
+    if (document.querySelector('#sheet:not([hidden]) input, #app input:focus')) { applyTime(); return; }   // don't wipe what someone is typing
+    render();
+  }, 60000);
+
   // ---------- Render ----------
   function view() {
     var me = Store.me(), team = Store.myTeam();
@@ -275,7 +295,8 @@
     document.body.classList.toggle('in-app', !v.welcome);
     var onMountain = !v.welcome && v.tab === 'mountain';
     document.body.classList.toggle('on-mountain', onMountain);
-    if (onMountain) document.body.setAttribute('data-time', Mountain.period()); else { document.body.removeAttribute('data-time'); Mountain.leave(); }
+    if (!onMountain) Mountain.leave();
+    applyTime();
     tabsEl.hidden = !!v.welcome;
     if (v.welcome) {
       // data can change while someone is typing their room code or team name: keep what they typed
