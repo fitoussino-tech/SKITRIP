@@ -97,18 +97,8 @@
   }
 
   // ---------- Mountain ----------
-  function viewMountain() {
-    var ranking = Store.ranking(), mine = Store.me().teamId, top = ranking[0].points || 1;
-    var rows = ranking.map(function (e, i) {
-      return '<li class="' + (e.team.id === mine ? 'mine' : '') + '" data-act="team-info" data-id="' + e.team.id + '">' +
-        '<span class="rank">' + (i + 1) + '</span><span class="dot" style="background:' + e.team.color + '"></span>' +
-        '<span class="name">' + esc(Store.displayName(e.team)) + '<i style="width:' + Math.max(0, Math.round(e.points / top * 100)) + '%;background:' + e.team.color + '"></i></span>' +
-        '<span class="score">' + e.points + '</span></li>';
-    }).join('');
-    return '<section><h2>The mountain <span>' + SEED.summit + ' pts to the summit</span></h2>' +
-      '<div class="mountain-wrap">' + Mountain.html(ranking, mine) + '</div>' +
-      '<ol class="ranking panel">' + rows + '</ol></section>';
-  }
+  // The panorama climb lives in js/mountain.js; its look follows the time of day.
+  function viewMountain() { return Mountain.view(); }
 
   // ---------- Team ----------
   function viewTeam() {
@@ -283,6 +273,9 @@
     var v = view();
     document.body.classList.toggle('welcome', !!v.welcome);
     document.body.classList.toggle('in-app', !v.welcome);
+    var onMountain = !v.welcome && v.tab === 'mountain';
+    document.body.classList.toggle('on-mountain', onMountain);
+    if (onMountain) document.body.setAttribute('data-time', Mountain.period()); else { document.body.removeAttribute('data-time'); Mountain.leave(); }
     tabsEl.hidden = !!v.welcome;
     if (v.welcome) {
       // data can change while someone is typing their room code or team name: keep what they typed
@@ -297,7 +290,7 @@
       a.classList.toggle('on', a.getAttribute('data-tab') === v.tab);
     });
     app.innerHTML = { today: viewToday, feed: viewFeed, mountain: viewMountain, team: viewTeam, schedule: viewSchedule }[v.tab]();
-    if (v.tab === 'mountain') Mountain.climb(app);
+    if (v.tab === 'mountain') Mountain.mount();
     Store.hydratePhotos(app);
   }
 
@@ -342,7 +335,9 @@
       closeSheet();
       if (Store.vote(el.getAttribute('data-vote'), t.id)) toast('<b>Vote counted</b> for ' + esc(Store.displayName(t)) + '.', 'wave');
     },
-    'pick-day': function (el) { schedDay = el.getAttribute('data-day'); render(); }
+    'pick-day': function (el) { schedDay = el.getAttribute('data-day'); render(); },
+    'mtn-zoom': function (el) { Mountain.zoom(el.getAttribute('data-z')); },
+    'mtn-pick': function (el) { Mountain.select(el.getAttribute('data-id')); }
   };
 
   document.addEventListener('click', function (e) {

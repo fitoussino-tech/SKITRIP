@@ -52,7 +52,8 @@ There is no build step: plain HTML, CSS and JavaScript.
 | `js/store.supabase.js` | The Supabase back end: loads, writes and listens for live changes |
 | `js/app.js` | Player screens |
 | `js/admin.js` | Back office screens |
-| `js/mascot.js`, `js/mountain.js` | The salamander, the leaderboard mountain |
+| `js/mascot.js` | The salamander |
+| `js/mountain.js` | The Mountain tab: the panorama climb, coloured by the time of day (add `?time=morning`, `day`, `golden` or `night` to the address to preview one) |
 | `supabase/schema.sql`, `schema_v2.sql`, `schema_v3.sql` | Database scripts, to run once each, in order |
 | `docs/SUPABASE_SETUP.md` | Step-by-step Supabase setup, including organiser accounts |
 

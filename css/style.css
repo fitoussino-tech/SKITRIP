@@ -71,23 +71,9 @@ p { margin: 0 0 8px; }
 .chip.ok { background: #C9F5D6; color: #0F5A2B; }
 .chip.no { background: #FFD3D0; color: #8A1B16; }
 
-/* Mountain */
-.mountain-wrap { border: 3px solid #fff; border-radius: var(--doodle); overflow: hidden; background: var(--navy); }
-.mountain { display: block; width: 100%; height: auto; }
-.mountain .mark { stroke: #fff; stroke-opacity: .28; stroke-width: 1.2; stroke-dasharray: 3 6; fill: none; }
-.mountain .mark-t { font: 600 10px var(--body); fill: #AEB9E6; }
-.alp { transition: transform 1.5s cubic-bezier(.3, 1.2, .4, 1); cursor: pointer; }
-.alp text { font: 800 11px var(--body); fill: var(--navy); pointer-events: none; }
-.alp .ring { animation: ring 1.6s ease-out infinite; transform-origin: 0 0; transform-box: fill-box; transform-origin: center; }
-@keyframes ring { from { transform: scale(.8); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
-.ranking { list-style: none; margin: 16px 0 0; padding: 0; }
-.ranking li { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 2px dashed rgba(255, 255, 255, .22); cursor: pointer; }
-.ranking li.mine { background: var(--navy-3); border-radius: 12px; border-bottom-color: transparent; padding: 9px 8px; margin: 0 -6px; }
+/* Mountain tab: see "Mountain tab" at the end of this file */
 .rank { flex: 0 0 26px; font-size: 20px; text-align: center; color: #AEB9E6; }
-.ranking li:nth-child(-n+3) .rank { color: var(--sun); }
 .dot { flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; display: inline-block; }
-.ranking .name { flex: 1; min-width: 0; font-weight: 600; }
-.ranking .name i { display: block; height: 5px; border-radius: 3px; margin-top: 4px; opacity: .85; }
 .score { font-size: 21px; }
 
 /* Team */
@@ -172,7 +158,7 @@ p { margin: 0 0 8px; }
 @keyframes jump { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-26px) rotate(-4deg); } }
 @keyframes dance { 0%, 100% { transform: rotate(-9deg) translateX(-10px); } 50% { transform: rotate(9deg) translateX(10px); } }
 @media (prefers-reduced-motion: reduce) {
-  .mascot *, .alp, .alp .ring, #toast, .sheet-body { animation: none !important; transition: none !important; }
+  .mascot *, .mtn *, #toast, .sheet-body { animation: none !important; transition: none !important; }
 }
 
 /* ---------- Winter backdrop ---------- */
@@ -257,8 +243,6 @@ body.welcome #app { padding-bottom: 150px; }
 .sq.rejected { border-color: var(--red); border-style: dashed; }
 .sq img:not(.loaded), .post-img:not(.loaded) { visibility: hidden; }
 .post-img { min-height: 120px; }
-.alp .you rect { fill: #fff; }
-.alp .you text { font: 800 8.5px var(--body); fill: var(--navy); letter-spacing: .8px; }
 a.link { text-decoration: underline; }
 
 /* ---------- Feed ---------- */
@@ -321,3 +305,172 @@ body.welcome:not(.admin) #app > section { padding-bottom: calc(150px + env(safe-
 @media (prefers-reduced-motion: reduce) {
   .hero .mascot, .mascot-btn .mascot { transform: none; transition: none; }
 }
+
+/* ---------- Mountain tab: the panorama climb, coloured by the time of day ---------- */
+/* js/mountain.js draws it; body[data-time] (morning | day | golden | night) picks the palette. */
+body[data-time="morning"] {
+  --m-bg: #F7EEF4; --m-text: #2A1E4A; --m-muted: #5E5180; --m-kicker: #B0287A; --m-title-fx: none;
+  --m-card: #FFFFFF; --m-line: #E2D2EA; --m-ring: #2A1E4A; --m-score: #B0287A; --m-rank: #5E5180; --m-row-me: #FCE7F1;
+  --m-sky: linear-gradient(180deg, #A99BDB 0%, #E9B3CF 46%, #FFD3B8 78%, #FFE8C9 100%); --m-frame: 0 10px 26px rgba(76,52,130,.18); --m-frame-line: transparent;
+  --m-sun: #FFF1CF; --m-sun-glow: 0 0 40px 16px rgba(255,224,180,.75); --m-sun-x: 34px; --m-sun-y: 132px; --m-sun-s: 52px; --m-sun-side: left;
+  --m-far2: #D7C3E4; --m-far1: #BBA3D6; --m-rock: #8676B4; --m-snow: #FFEFF2; --m-shade: rgba(52,34,110,.34);
+  --m-edge: rgba(255,246,248,.9); --m-edge-w: 1px; --m-edge-fx: none; --m-trail-under: rgba(42,30,74,.38); --m-trail: #FFFFFF; --m-trail-fx: none;
+  --m-forest: #4A3C78; --m-ground: #FFF4F4; --m-wall: #F2A65A; --m-roof: #B0287A; --m-door: #FFF1CF; --m-house-line: #2A1E4A;
+  --m-pole: #2A1E4A; --m-flag: #B0287A; --m-label: #FFFFFF; --m-label-text: #2A1E4A; --m-top: #B0287A; --m-top-text: #FFFFFF;
+  --m-pin-border: #FFFFFF; --m-pin-shadow: 0 2px 6px rgba(42,30,74,.35); --m-me: #FFB23F; --m-me-text: #2A1E4A; --m-me-glow: 0 0 0 4px rgba(255,178,63,.45);
+  --m-chip: #2A1E4A; --m-chip-text: #FFFFFF; --m-up: #1E7F55; --m-down: #B0284F;
+  --m-banner: rgba(42,30,74,.86); --m-banner-text: #FFFFFF; --m-banner-up: #9BE8C4; --m-seg: #FFFFFF; --m-seg-on: #2A1E4A; --m-seg-on-text: #FFFFFF;
+}
+body[data-time="day"] {
+  --m-bg: #EEF4FC; --m-text: #0D1B3E; --m-muted: #4A5878; --m-kicker: #0077A0; --m-title-fx: none;
+  --m-card: #FFFFFF; --m-line: #D3E0F2; --m-ring: #0D1B3E; --m-score: #0D1B3E; --m-rank: #0077A0; --m-row-me: #FFE3F6;
+  --m-sky: linear-gradient(180deg, #2F7FF5 0%, #7DB8FF 56%, #CDE6FF 100%); --m-frame: 0 10px 26px rgba(13,27,62,.18); --m-frame-line: transparent;
+  --m-sun: #FFF6C9; --m-sun-glow: 0 0 34px 14px rgba(255,246,201,.75); --m-sun-x: 46%; --m-sun-y: 46px; --m-sun-s: 36px; --m-sun-side: left;
+  --m-far2: #B6D3F7; --m-far1: #8FB4E6; --m-rock: #566C9C; --m-snow: #FFFFFF; --m-shade: rgba(18,34,86,.3);
+  --m-edge: rgba(255,255,255,.95); --m-edge-w: 1px; --m-edge-fx: none; --m-trail-under: rgba(13,27,62,.4); --m-trail: #FFFFFF; --m-trail-fx: none;
+  --m-forest: #1F4466; --m-ground: #FFFFFF; --m-wall: #FFFFFF; --m-roof: #E0369F; --m-door: #0D1B3E; --m-house-line: #0D1B3E;
+  --m-pole: #0D1B3E; --m-flag: #E0369F; --m-label: #FFFFFF; --m-label-text: #0D1B3E; --m-top: #E0369F; --m-top-text: #FFFFFF;
+  --m-pin-border: #FFFFFF; --m-pin-shadow: 0 3px 8px rgba(13,27,62,.35); --m-me: #FF4FD8; --m-me-text: #0D1B3E; --m-me-glow: 0 0 0 4px rgba(255,79,216,.35), 0 3px 8px rgba(13,27,62,.35);
+  --m-chip: #0D1B3E; --m-chip-text: #FFFFFF; --m-up: #13804A; --m-down: #C2362F;
+  --m-banner: #FFFFFF; --m-banner-text: #0D1B3E; --m-banner-up: #13804A; --m-seg: #FFFFFF; --m-seg-on: #0D1B3E; --m-seg-on-text: #FFFFFF;
+}
+body[data-time="golden"] {
+  --m-bg: #2B1734; --m-text: #FFF4EA; --m-muted: #E6C7D8; --m-kicker: #FFC46B; --m-title-fx: 0 0 18px rgba(255,170,90,.45);
+  --m-card: #3D2148; --m-line: rgba(255,196,107,.35); --m-ring: #FFF4EA; --m-score: #FFC46B; --m-rank: #FF9FB8; --m-row-me: #542D5E;
+  --m-sky: linear-gradient(180deg, #4B2F86 0%, #C3507E 40%, #FF8A5B 70%, #FFC97A 100%); --m-frame: 0 10px 30px rgba(0,0,0,.35); --m-frame-line: transparent;
+  --m-sun: #FFE29A; --m-sun-glow: 0 0 44px 18px rgba(255,170,90,.7); --m-sun-x: calc(100% - 66px); --m-sun-y: 138px; --m-sun-s: 58px;
+  --m-far2: #C86B8A; --m-far1: #9A4E7E; --m-rock: #5C3770; --m-snow: #FFD9B0; --m-shade: rgba(36,12,48,.45);
+  --m-edge: #FFE2B8; --m-edge-w: 1px; --m-edge-fx: none; --m-trail-under: rgba(30,10,40,.45); --m-trail: #FFE2B8; --m-trail-fx: none;
+  --m-forest: #2E1A3C; --m-ground: #FFDDBB; --m-wall: #FFC46B; --m-roof: #C3507E; --m-door: #2B1734; --m-house-line: #2B1734;
+  --m-pole: #2B1734; --m-flag: #FF7A9C; --m-label: #FFE2B8; --m-label-text: #2B1734; --m-top: #FF7A9C; --m-top-text: #2B1734;
+  --m-pin-border: #FFF4EA; --m-pin-shadow: 0 2px 6px rgba(0,0,0,.4); --m-me: #FFC46B; --m-me-text: #2B1734; --m-me-glow: 0 0 0 4px rgba(255,196,107,.45), 0 0 14px rgba(255,170,90,.6);
+  --m-chip: #2B1734; --m-chip-text: #FFF4EA; --m-up: #9BE8B0; --m-down: #FF9FB2;
+  --m-banner: rgba(43,23,52,.88); --m-banner-text: #FFF4EA; --m-banner-up: #9BE8B0; --m-seg: #3D2148; --m-seg-on: #FFC46B; --m-seg-on-text: #2B1734;
+}
+body[data-time="night"] {
+  --m-bg: #0B0820; --m-text: #FFFFFF; --m-muted: #B7B2E6; --m-kicker: #3DF5FF; --m-title-fx: 0 0 2px #FF4FD8, 0 0 14px #FF4FD8;
+  --m-card: #160F38; --m-line: #3DF5FF; --m-ring: #FFFFFF; --m-score: #FFE14D; --m-rank: #FF4FD8; --m-row-me: #2A1D66;
+  --m-sky: linear-gradient(180deg, #05030F 0%, #170F3D 60%, #2A1660 100%); --m-frame: 0 0 24px rgba(255,79,216,.35); --m-frame-line: #FF4FD8;
+  --m-sun: #F6F2FF; --m-sun-glow: 0 0 26px 8px rgba(180,160,255,.5); --m-sun-x: 42%; --m-sun-y: 46px; --m-sun-s: 30px;
+  --m-far2: #211552; --m-far1: #1A1046; --m-rock: #140D36; --m-snow: #C9C0F5; --m-shade: rgba(4,2,18,.5);
+  --m-edge: #FF4FD8; --m-edge-w: 1.6px; --m-edge-fx: drop-shadow(0 0 3px #FF4FD8); --m-trail-under: rgba(0,0,0,.45); --m-trail: #3DF5FF; --m-trail-fx: drop-shadow(0 0 3px #3DF5FF);
+  --m-forest: #0E0926; --m-ground: #1E1647; --m-wall: #160F38; --m-roof: #FF4FD8; --m-door: #FFE14D; --m-house-line: #FF4FD8;
+  --m-pole: #B7B2E6; --m-flag: #FF4FD8; --m-label: #3DF5FF; --m-label-text: #0B0820; --m-top: #FF4FD8; --m-top-text: #0B0820;
+  --m-pin-border: #FFFFFF; --m-pin-shadow: none; --m-me: #FFE14D; --m-me-text: #0B0820; --m-me-glow: 0 0 0 3px rgba(255,225,77,.5), 0 0 16px 4px #FFE14D;
+  --m-chip: #FF4FD8; --m-chip-text: #0B0820; --m-up: #3DF5FF; --m-down: #FF8FB1;
+  --m-banner: rgba(22,15,56,.9); --m-banner-text: #FFFFFF; --m-banner-up: #3DF5FF; --m-seg: transparent; --m-seg-on: #3DF5FF; --m-seg-on-text: #0B0820;
+}
+
+/* the whole screen takes the time-of-day colours while you are on the Mountain tab */
+body.on-mountain #app { background: var(--m-bg); }
+body.on-mountain #sky { opacity: 0; }
+#sky { transition: opacity .4s; }
+.mtn { color: var(--m-text); font-family: 'Space Grotesk', var(--body); display: flex; flex-direction: column; gap: 14px; }
+.mtn button { font-family: inherit; }
+.m-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.m-head > div { display: flex; flex-direction: column; gap: 4px; }
+.m-kicker { font-size: 12px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--m-kicker); }
+.m-title { margin: 0; font-family: 'Righteous', var(--hand); font-weight: 400; font-size: 40px; line-height: 1; color: var(--m-text); text-shadow: var(--m-title-fx); }
+.m-time { padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; color: var(--m-text); border: 1.5px solid var(--m-line); white-space: nowrap; }
+
+.m-frame { position: relative; height: 380px; border-radius: 20px; overflow: hidden; background: var(--m-sky); box-shadow: var(--m-frame); }
+.m-frame::after { content: ''; position: absolute; inset: 0; border-radius: 20px; border: 2px solid var(--m-frame-line); pointer-events: none; z-index: 40; }
+.m-sun { position: absolute; left: var(--m-sun-x); top: var(--m-sun-y); width: var(--m-sun-s); height: var(--m-sun-s); border-radius: 50%; background: var(--m-sun); box-shadow: var(--m-sun-glow); }
+.m-stars { position: absolute; inset: 0 0 50% 0; opacity: .8;
+  background-image: radial-gradient(#FFFFFF 1px, transparent 1.4px), radial-gradient(rgba(255,255,255,.6) .8px, transparent 1.2px);
+  background-size: 90px 70px, 53px 47px; background-position: 10px 12px, 34px 30px; }
+.m-scroll { position: absolute; inset: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.m-scroll::-webkit-scrollbar { display: none; }
+.m-track { position: relative; height: 380px; width: var(--vw); transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.mtn.zoomed .m-track { width: var(--zw); }
+
+.mtn .layer { position: absolute; inset: 0; width: 100%; height: 380px; display: block; transition: opacity .9s; }
+.mtn .layer.zo, .mtn.zoomed .layer.ov { opacity: 0; }
+.mtn.zoomed .layer.zo { opacity: 1; }
+.m-far2 { fill: var(--m-far2); } .m-far1 { fill: var(--m-far1); } .m-rock { fill: var(--m-rock); }
+.m-snow { fill: var(--m-snow); } .m-shade { fill: var(--m-shade); } .m-forest { fill: var(--m-forest); } .m-ground { fill: var(--m-ground); }
+.m-edge { fill: none; stroke: var(--m-edge); stroke-width: var(--m-edge-w); stroke-linejoin: round; filter: var(--m-edge-fx); }
+.m-edge.z { stroke-width: calc(var(--m-edge-w) + .5px); }
+.m-trail-under { fill: none; stroke: var(--m-trail-under); stroke-width: 3.5px; stroke-linecap: round; }
+.m-trail { fill: none; stroke: var(--m-trail); stroke-width: 1.6px; stroke-dasharray: 4 4; stroke-linecap: round; filter: var(--m-trail-fx); }
+.m-trail-under.z { stroke-width: 5px; } .m-trail.z { stroke-width: 2.2px; stroke-dasharray: 6 6; }
+
+.m-chalet, .m-summit { position: absolute; left: var(--ox); transition: left .9s cubic-bezier(.2,.8,.2,1); }
+.m-chalet { top: 336px; width: 34px; height: 28px; }
+.m-summit { top: var(--y); width: 30px; height: 40px; }
+.mtn.zoomed .m-chalet, .mtn.zoomed .m-summit { left: var(--zx); }
+.m-chalet path { stroke: var(--m-house-line); stroke-width: 2; stroke-linejoin: round; }
+.m-chalet .wall { fill: var(--m-wall); } .m-chalet .roof { fill: var(--m-roof); } .m-chalet .door { fill: var(--m-door); }
+.m-summit .pole { stroke: var(--m-pole); stroke-width: 2.5; stroke-linecap: round; fill: none; }
+.m-summit .flag { fill: var(--m-flag); stroke: var(--m-pole); stroke-width: 2; stroke-linejoin: round; }
+
+.m-pole { position: absolute; left: var(--ox); top: calc(var(--y) - 8px); width: 2px; height: 8px; background: var(--m-pole); opacity: .5;
+  transition: left .9s cubic-bezier(.2,.8,.2,1), top .9s, height .9s; }
+.m-pole.major { top: calc(var(--y) - 16px); height: 16px; opacity: .9; }
+.mtn.zoomed .m-pole { left: var(--zx); top: var(--y); height: 22px; opacity: .9; }   /* zoomed: the signpost hangs below the trail, clear of the climbers */
+.m-flag-label { position: absolute; left: var(--ox); top: calc(var(--y) - 16px); padding: 1px 6px; border-radius: 6px; background: var(--m-label); color: var(--m-label-text);
+  font-size: 9px; font-weight: 700; white-space: nowrap; opacity: 0; transition: left .9s cubic-bezier(.2,.8,.2,1), top .9s, opacity .5s; }
+.m-flag-label.major, .m-flag-label.top { opacity: 1; }
+.m-flag-label.top { top: var(--y); background: var(--m-top); color: var(--m-top-text); }
+.mtn.zoomed .m-flag-label { left: var(--zx); top: calc(var(--y) + 4px); opacity: 1; font-size: 11px; padding: 2px 7px; z-index: 5; }
+.mtn.zoomed .m-flag-label.top { top: var(--y); }
+.m-flag-label i { font-style: normal; }
+.m-flag-label .z, .mtn.zoomed .m-flag-label .o { display: none; }
+.mtn.zoomed .m-flag-label .z { display: inline; }
+
+.m-stem { position: absolute; left: var(--sox); top: var(--soy); width: 2px; height: 0; background: var(--m-pole); opacity: 0;
+  transition: left .9s cubic-bezier(.2,.8,.2,1), top .9s, height .9s, opacity .5s; }
+.mtn.zoomed .m-stem { left: var(--szx); top: var(--szy); height: var(--szh); opacity: .75; }
+.m-pin { position: absolute; left: var(--ox); top: var(--oy); width: var(--os); height: var(--os); padding: 0; box-sizing: border-box;
+  border-radius: 50%; border: 2px solid var(--m-pin-border); box-shadow: var(--m-pin-shadow); color: #0B0820; cursor: pointer;
+  font-family: 'Righteous', var(--hand); font-size: 16px; line-height: 1;
+  transition: left .9s cubic-bezier(.2,.8,.2,1), top .9s cubic-bezier(.2,.8,.2,1), width .9s, height .9s; }
+.m-pin::before { content: ''; position: absolute; inset: -12px; }      /* a bigger tap area on the whole-mountain view */
+.m-pin.me { border-color: var(--m-me); box-shadow: var(--m-me-glow); }
+body[data-time="night"] .m-pin:not(.me) { box-shadow: 0 0 10px 1px var(--glow); }   /* each room glows in its own colour */
+.mtn.zoomed .m-pin { left: var(--zx); top: var(--zy); width: var(--zs); height: var(--zs); border-width: 3px; }
+.m-ini { opacity: 0; transition: opacity .4s; }
+.mtn.zoomed .m-ini { opacity: 1; }
+.m-chip { position: absolute; left: var(--cox); top: var(--coy); width: 120px; display: none; justify-content: center; pointer-events: none; z-index: 30;
+  transition: left .9s cubic-bezier(.2,.8,.2,1), top .9s cubic-bezier(.2,.8,.2,1); }
+.m-chip.me, .mtn.zoomed .m-chip { display: flex; }
+.mtn.zoomed .m-chip { left: var(--czx); top: var(--czy); }
+.m-chip span { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 8px; border-radius: 99px;
+  background: var(--m-chip); color: var(--m-chip-text); font-size: 11px; font-weight: 700; }
+.m-chip.me span { background: var(--m-me); color: var(--m-me-text); }
+
+.m-banner { position: absolute; left: 10px; top: 10px; right: 10px; width: max-content; max-width: calc(100% - 20px); box-sizing: border-box;
+  padding: 5px 10px; border-radius: 99px; background: var(--m-banner); color: var(--m-banner-text); font-size: 12px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-banner .m-up { color: var(--m-banner-up); }
+.m-hint { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); padding: 4px 12px; border-radius: 99px; background: var(--m-banner);
+  color: var(--m-banner-text); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .5s; }
+.mtn.zoomed .m-hint { opacity: 1; }
+
+.m-seg { display: flex; gap: 4px; padding: 4px; border-radius: 99px; background: var(--m-seg); border: 1.5px solid var(--m-line); }
+.m-seg button { flex: 1; min-height: 44px; border: 0; border-radius: 99px; background: transparent; color: var(--m-text);
+  font-family: 'Righteous', var(--hand); font-size: 16px; cursor: pointer; transition: background .3s, color .3s; }
+.mtn:not(.zoomed) .seg-all, .mtn.zoomed .seg-me { background: var(--m-seg-on); color: var(--m-seg-on-text); }
+
+.m-card { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 18px; background: var(--m-card); border: 1.5px solid var(--m-line); }
+.m-face { flex: 0 0 52px; width: 52px; height: 52px; box-sizing: border-box; border-radius: 50%; border: 3px solid var(--m-ring);
+  display: flex; align-items: center; justify-content: center; font-family: 'Righteous', var(--hand); font-size: 24px; color: #0B0820;
+  background-size: cover; background-position: center; }
+.m-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-weight: 600; }
+.m-card-main b { font-family: 'Righteous', var(--hand); font-weight: 400; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-card-main b i { font-style: normal; font-size: 14px; color: var(--m-muted); }
+.m-link { align-self: flex-start; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--m-text); font-size: 13px; font-weight: 700;
+  text-decoration: underline; cursor: pointer; min-height: 24px; }
+.m-score { font-family: 'Righteous', var(--hand); font-size: 30px; color: var(--m-score); }
+.m-muted { color: var(--m-muted); } .m-up { color: var(--m-up); } .m-down { color: var(--m-down); }
+
+.m-list { display: flex; flex-direction: column; padding: 4px 12px; border-radius: 18px; background: var(--m-card); border: 1.5px solid var(--m-line); }
+.m-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; margin: 0 -8px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--m-text); text-align: left; cursor: pointer; }
+.m-row.me { background: var(--m-row-me); }
+.m-rank { flex: 0 0 24px; font-family: 'Righteous', var(--hand); font-size: 19px; color: var(--m-rank); }
+.m-dot { flex: 0 0 14px; width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--m-ring); }
+.m-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-move { flex: 0 0 34px; font-size: 13px; font-weight: 700; text-align: right; }
+.m-pts { flex: 0 0 48px; font-family: 'Righteous', var(--hand); font-size: 19px; text-align: right; color: var(--m-score); }
+.m-gap { text-align: center; color: var(--m-muted); font-weight: 700; letter-spacing: 3px; padding: 2px 0; }
