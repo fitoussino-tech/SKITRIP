@@ -383,6 +383,7 @@
     // --- points
     points: points,
     ledger: ledgerOf,
+    lines: completedLines,             // finished bingo lines (rows, columns, diagonals)
     ranking: function () {
       return state.teams.map(function (t, i) { return { team: t, index: i, points: points(t.id) }; })
         .sort(function (a, b) { return b.points - a.points || a.index - b.index; });

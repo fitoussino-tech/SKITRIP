@@ -15,8 +15,12 @@
 
   function currentTab() {
     var t = location.hash.replace('#', '');
+    if (/^room\//.test(t)) return 'feed';                       // a room's page lives under the Feed tab
     return TABS.indexOf(t) >= 0 ? t : 'today';
   }
+  // #room/t3 -> 't3' (another room's page)
+  function roomId() { var m = /^#room\/([A-Za-z0-9_-]+)$/.exec(location.hash); return m && Store.team(m[1]) ? m[1] : null; }
+  var roomBack = '#feed';                                        // where "Back" goes from a room's page
   function dayLabel(key) { var d = SEED.days.filter(function (x) { return x[0] === key; })[0]; return d ? d[1] : key; }
   function chip(sub) {
     if (!sub) return '';
@@ -146,21 +150,126 @@
   }
 
   // ---------- Feed ----------
+  function face(t, cls) {
+    return t.avatar ? '<img class="' + (cls || 'avatar') + '" alt="" src="' + t.avatar + '">'
+      : '<span class="' + (cls || 'avatar') + ' ini" style="background:' + t.color + '">' + initial(t) + '</span>';
+  }
+  // every room, best first: tap one to open its page
+  function roomsStrip(active) {
+    var mine = Store.me().teamId;
+    return '<nav class="rooms" aria-label="Rooms">' + Store.ranking().map(function (e, i) {
+      var t = e.team;
+      return '<button class="room-chip' + (t.id === active ? ' on' : '') + '" data-act="team-info" data-id="' + t.id + '"' + (t.id === active ? ' aria-current="page"' : '') + '>' +
+        '<span class="ring" style="--team:' + t.color + '">' + face(t, 'room-face') + '<i>' + (i + 1) + '</i></span>' +
+        '<span class="room-name">' + (t.id === mine ? 'You' : esc(Store.displayName(t))) + '</span></button>';
+    }).join('') + '</nav>';
+  }
+
+  // ---------- A room's page: their bingo, the challenges they completed, every approved photo ----------
+  function viewRoom(id) {
+    var t = Store.team(id), me = Store.me(), mine = me.teamId === id;
+    var rank = 1;
+    Store.ranking().forEach(function (e, i) { if (e.team.id === id) rank = i + 1; });
+    var done = 0, waiting = 0;
+    // other rooms' photos only show once the jury approved them (same rule as the feed)
+    var squares = Store.bingoCard(id).map(function (sq) {
+      var sub = Store.submissionFor(id, 'bingo', sq.id), st = sub ? sub.status : 'empty';
+      if (st === 'approved') done++;
+      if (st === 'pending') waiting++;
+      if (st === 'approved') {
+        return '<button class="sq approved" data-act="view-photo" data-id="' + esc(sub.id) + '" data-room="' + id + '" aria-label="' + esc(sq.text) + ': see the photo">' +
+          '<img alt="" data-photo="' + esc(sub.id) + '"><span>' + esc(sq.text) + '</span></button>';
+      }
+      return '<div class="sq ' + (st === 'pending' ? 'pending' : 'empty') + '"><span>' + esc(sq.text) + '</span></div>';
+    }).join('');
+    var lines = Store.lines(id), posts = Store.posts(id);
+    var wins = posts.filter(function (p) { return p.kind === 'challenge'; });
+    var pendingCh = Store.challenges().filter(function (c) { var s = Store.submissionFor(id, 'challenge', c.id); return s && s.status === 'pending'; }).length;
+    var winRows = wins.length ? wins.map(function (p) {
+      var c = Store.challenge(p.refId) || {};
+      return '<li><button class="win" data-act="view-photo" data-id="' + esc(p.id) + '" data-room="' + id + '">' +
+        '<span class="win-shot" data-photo="' + esc(p.id) + '"></span>' +
+        '<span class="win-text"><span class="tag ' + esc(c.kind || '') + '">' + (c.kind === 'race' ? 'Race' : 'Mission') + '</span> <b>' + esc(p.text) + '</b>' +
+        '<span class="fine">' + esc(dayLabel(c.day)) + (p.value ? ' · ' + esc(p.value) + ' ' + esc(p.unit) : '') + '</span></span>' +
+        '<em>+' + p.worth + '</em></button></li>';
+    }).join('') : '<li class="empty"><span>No challenge completed yet' + (pendingCh ? ' (' + pendingCh + ' waiting for the jury)' : '') + '.</span></li>';
+    var photosGrid = posts.length ? '<div class="gallery">' + posts.map(function (p) {
+      return '<button class="gphoto" data-act="view-photo" data-id="' + esc(p.id) + '" data-room="' + id + '" data-photo="' + esc(p.id) + '"><span>' + esc(p.text) + '</span></button>';
+    }).join('') + '</div>' : '<p class="fine">No approved photos yet.</p>';
+
+    return '<section class="room">' +
+      '<a class="back" href="' + esc(roomBack) + '">← Back</a>' + roomsStrip(id) +
+      '<div class="team-head" style="--team:' + t.color + '">' +
+        (t.avatar ? '<div class="badge has" style="background-image:url(' + t.avatar + ')"></div>' : '<div class="badge">' + initial(t) + '</div>') +
+        '<div><h2>' + esc(Store.displayName(t)) + (mine ? ' <span class="you">you</span>' : '') + '</h2><p class="fine">' + esc(t.room) + ' · ' + t.members.map(esc).join(', ') + '</p></div>' +
+        '<div class="total"><b>' + Store.points(id) + '</b><span>pts · #' + rank + '</span></div></div>' +
+      '<div class="stats">' +
+        '<div><b>' + done + '<small>/16</small></b><span>bingo squares</span></div>' +
+        '<div><b>' + lines + '</b><span>' + (lines === 1 ? 'bingo line' : 'bingo lines') + '</span></div>' +
+        '<div><b>' + wins.length + '</b><span>challenges done</span></div>' +
+        '<div><b>' + posts.length + '</b><span>photos</span></div></div>' +
+      '<h2>Bingo <span>' + (waiting ? waiting + ' waiting for the jury (dashed). ' : '') + 'Tap a square to see the photo.</span></h2>' +
+      '<div class="bingo">' + squares + '</div>' +
+      '<h2>Challenges completed</h2><ul class="wins panel">' + winRows + '</ul>' +
+      '<h2>All their photos <span>approved by the jury, newest first</span></h2>' + photosGrid +
+      '<h2>Points <span>most recent first</span></h2><ul class="ledger panel">' + ledgerRows(Store.ledger(id)) + '</ul></section>';
+  }
+
+  // full-screen photo, with the room's other photos one swipe away
+  var viewer = { list: [], i: 0 };
+  function openViewer(id, room) {
+    viewer.list = Store.posts(room).map(function (p) { return p.id; });
+    viewer.room = room;
+    viewer.i = Math.max(0, viewer.list.indexOf(id));
+    if (viewer.list.indexOf(id) < 0) viewer.list.unshift(id);
+    drawViewer();
+  }
+  function drawViewer() {
+    var el = $('#viewer');
+    if (!el) { el = document.createElement('div'); el.id = 'viewer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); bindViewer(el); }
+    var id = viewer.list[viewer.i], p = Store.posts(viewer.room).filter(function (x) { return x.id === id; })[0];
+    if (!p) { closeViewer(); return; }
+    var c = p.kind === 'challenge' ? Store.challenge(p.refId) : null;
+    el.innerHTML = '<button class="v-close" data-v="close" aria-label="Close">×</button>' +
+      '<img class="v-img" alt="' + esc(Store.displayName(p.team) + ': ' + p.text) + '" data-photo="' + esc(p.id) + '">' +
+      (viewer.list.length > 1 ? '<button class="v-nav prev" data-v="prev" aria-label="Previous photo">‹</button><button class="v-nav next" data-v="next" aria-label="Next photo">›</button>' : '') +
+      '<div class="v-cap"><b>' + esc(Store.displayName(p.team)) + '</b> accomplished <i>' + esc(p.text) + '</i>' +
+      (p.value ? ' · ' + esc(p.value) + ' ' + esc(p.unit) : '') +
+      '<span>' + (c ? esc(dayLabel(c.day)) + ' · ' : p.kind === 'bingo' ? 'Bingo · ' : '') + '+' + p.worth + ' pts · ' + (viewer.i + 1) + ' / ' + viewer.list.length + '</span></div>';
+    el.hidden = false;
+    Store.hydratePhotos(el);
+  }
+  function closeViewer() { var el = $('#viewer'); if (el) { el.hidden = true; el.innerHTML = ''; } }
+  function stepViewer(d) { viewer.i = (viewer.i + d + viewer.list.length) % viewer.list.length; drawViewer(); }
+  function bindViewer(el) {
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-v]'), a = b && b.getAttribute('data-v');
+      if (a === 'prev') stepViewer(-1); else if (a === 'next') stepViewer(1);
+      else if (a === 'close' || e.target === el) closeViewer();
+    });
+    var x0 = null;
+    el.addEventListener('pointerdown', function (e) { x0 = e.clientX; });
+    el.addEventListener('pointerup', function (e) {
+      if (x0 === null) return;
+      var dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 50 && viewer.list.length > 1) stepViewer(dx < 0 ? 1 : -1);
+    });
+  }
+
   function viewFeed() {
     var posts = Store.feed();
     if (!posts.length) {
-      return '<section><h2>Feed <span>validated moments</span></h2>' +
+      return '<section><h2>Feed <span>validated moments</span></h2>' + roomsStrip(null) +
         '<article class="card quiet"><h3>Nothing here yet</h3><p>Approved proofs land here, newest first. Send one from Today or from your bingo card.</p></article></section>';
     }
     var items = posts.map(function (p) {
-      var name = Store.displayName(p.team), av = p.team.avatar;
+      var name = Store.displayName(p.team);
       var head = '<header class="post-head" data-act="team-info" data-id="' + p.team.id + '">' +
-        (av ? '<img class="avatar" alt="" src="' + av + '">'
-            : '<span class="avatar ini" style="background:' + p.team.color + '">' + initial(p.team) + '</span>') +
+        face(p.team) +
         '<span class="post-meta"><b>' + esc(name) + '</b> accomplished <i>' + esc(p.text) + '</i></span></header>';
       return '<article class="post">' + head + '<img class="post-img" alt="' + esc(name + ': ' + p.text) + '" data-photo="' + esc(p.id) + '"></article>';
     }).join('');
-    return '<section><h2>Feed <span>validated moments, newest first</span></h2>' + items + '</section>';
+    return '<section><h2>Feed <span>tap a room to see its bingo, challenges and photos</span></h2>' + roomsStrip(null) + items + '</section>';
   }
 
   // ---------- Sheets ----------
@@ -196,23 +305,7 @@
         return '<button class="btn ghost" data-act="cast-vote" data-vote="' + v.id + '" data-id="' + t.id + '"><span class="dot" style="background:' + t.color + '"></span>' + esc(Store.displayName(t)) + '</button>';
       }).join('') + '</div>');
   }
-  function sheetTeam(id) {
-    var t = Store.team(id), posts = Store.posts(id);
-    if (!t) return;
-    var badge = t.avatar
-      ? '<div class="badge has" style="background-image:url(' + t.avatar + ')"></div>'
-      : '<div class="badge">' + initial(t) + '</div>';
-    var gallery = posts.length
-      ? '<div class="gallery">' + posts.map(function (p) {
-          return '<div class="gphoto" data-photo="' + esc(p.id) + '"><span>' + esc(p.text) + '</span></div>';
-        }).join('') + '</div>'
-      : '<p class="fine">No posts yet.</p>';
-    openSheet('<div class="team-head" style="--team:' + t.color + '">' + badge +
-      '<div><h3>' + esc(Store.displayName(t)) + '</h3><p class="fine">' + esc(t.room) + ' · ' + t.members.map(esc).join(', ') + '</p></div>' +
-      '<div class="total"><b>' + Store.points(id) + '</b><span>pts</span></div></div>' +
-      '<h3 class="sub">Posts</h3>' + gallery +
-      '<h3 class="sub">Points</h3><ul class="ledger">' + ledgerRows(Store.ledger(id)) + '</ul>');
-  }
+
 
   // Shrink a photo in the browser before it is sent, so uploads stay light on mountain 4G.
   function shrink(file, max, done) {
@@ -318,6 +411,7 @@
     Array.prototype.forEach.call(tabsEl.querySelectorAll('a'), function (a) {
       a.classList.toggle('on', a.getAttribute('data-tab') === v.tab);
     });
+    if (roomId()) { app.innerHTML = viewRoom(roomId()); Store.hydratePhotos(app); return; }
     app.innerHTML = { today: viewToday, feed: viewFeed, mountain: viewMountain, team: viewTeam, schedule: viewSchedule }[v.tab]();
     if (v.tab === 'mountain') Mountain.mount();
     Store.hydratePhotos(app);
@@ -341,7 +435,12 @@
     'restart-yes': function () { sheetEl.hidden = true; sheetEl.innerHTML = ''; resetJoin(); Store.restart(); },
     'open-submit': function (el) { sheetSubmit(el.getAttribute('data-kind'), el.getAttribute('data-id')); },
     'open-vote': function (el) { sheetVote(el.getAttribute('data-id')); },
-    'team-info': function (el) { sheetTeam(el.getAttribute('data-id')); },
+    'team-info': function (el) {
+      if (!sheetEl.hidden) { sheetEl.hidden = true; sheetEl.innerHTML = ''; draft = null; }
+      if (!roomId()) roomBack = location.hash && location.hash !== '#' ? location.hash : '#feed';
+      location.hash = 'room/' + el.getAttribute('data-id');
+    },
+    'view-photo': function (el) { openViewer(el.getAttribute('data-id'), el.getAttribute('data-room')); },
     'close-sheet': closeSheet,
     'sample-photo': function () { setPhoto(samplePhoto()); },
     'send-now': function (el) { el.disabled = true; el.textContent = 'Trying…'; Store.sendNow(); },
@@ -401,7 +500,14 @@
       });
     });
   });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheetEl.hidden) closeSheet(); });
+  document.addEventListener('keydown', function (e) {
+    var v = $('#viewer');
+    if (v && !v.hidden) {
+      if (e.key === 'Escape') closeViewer(); else if (e.key === 'ArrowRight') stepViewer(1); else if (e.key === 'ArrowLeft') stepViewer(-1);
+      return;
+    }
+    if (e.key === 'Escape' && !sheetEl.hidden) closeSheet();
+  });
   window.addEventListener('hashchange', function () { app.scrollTop = 0; window.scrollTo(0, 0); render(); });
 
   Store.on(function (evt) {

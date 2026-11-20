@@ -172,7 +172,7 @@
       '<span class="m-muted">' + ord(r.rank) + ' of ' + rows.length + ' · ' + Math.max(0, SEED.summit - r.points) + ' pts to the summit</span>' +
       '<span class="' + (r.move > 0 ? 'm-up' : r.move < 0 ? 'm-down' : 'm-muted') + '">' + move +
       (ahead ? ' · ' + (ahead.points - r.points) + ' pts to pass ' + esc(Store.displayName(ahead.team)) : '') + '</span>' +
-      '<button class="m-link" data-act="team-info" data-id="' + t.id + '">See their photos</button></div>' +
+      '<button class="m-link" data-act="team-info" data-id="' + t.id + '">Open their page: bingo, challenges, photos</button></div>' +
       '<span class="m-score">' + r.points + '</span>';
   }
 
