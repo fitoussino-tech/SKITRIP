@@ -20,7 +20,7 @@
   function dayLabel(key) { var d = SEED.days.filter(function (x) { return x[0] === key; })[0]; return d ? d[1] : key; }
   function chip(sub) {
     if (!sub) return '';
-    if (sub.sending) return '<span class="chip pending">Sending…</span>';
+    if (sub.sending) return sub.waiting ? '<span class="chip pending">Saved · waiting for signal</span>' : '<span class="chip pending">Sending…</span>';
     if (sub.status === 'pending') return '<span class="chip pending">Waiting for review</span>';
     if (sub.status === 'approved') return '<span class="chip ok">Approved</span>';
     return '<span class="chip no">Rejected</span>';
@@ -69,6 +69,14 @@
   }
 
   // ---------- Today ----------
+  // proofs saved on this phone that could not go out yet
+  function outboxBanner() {
+    var o = Store.outbox();
+    if (!o.count || !o.waiting) return '';
+    return '<div class="outbox" role="status"><span><b>' + (o.count === 1 ? '1 proof' : o.count + ' proofs') + ' saved on your phone.</b> ' +
+      'No signal right now: ' + (o.count === 1 ? 'it sends' : 'they send') + ' by itself as soon as you have some. Keep the app open if you can.</span>' +
+      '<button class="btn small" data-act="send-now">Try now</button></div>';
+  }
   function viewToday() {
     var me = Store.me(), team = Store.myTeam(), day = Store.today();
     var cards = Store.challenges(day).map(function (c) {
@@ -89,7 +97,7 @@
         '<footer>' + (b ? '<span class="chip ok">You voted for ' + esc(Store.displayName(Store.team(b))) + '</span>'
           : '<span class="fine">Results at the reveal</span><button class="btn small" data-act="open-vote" data-id="' + v.id + '">Vote</button>') + '</footer></article>';
     }).join('');
-    return '<section><div class="hello"><button class="mascot-btn" data-act="poke" aria-label="Poke the salamander">' + Mascot.svg('idle') + '</button>' +
+    return '<section>' + outboxBanner() + '<div class="hello"><button class="mascot-btn" data-act="poke" aria-label="Poke the salamander">' + Mascot.svg('idle') + '</button>' +
       '<div class="bubble"><b>Hi ' + esc(me.name) + '!</b> ' + esc(Store.message()) + '</div></div>' +
       '<h2>' + esc(dayLabel(day)) + ' January <span>challenges</span></h2>' + cards + votes +
       (Store.demo ? '<p class="hint">Demo mode: nothing leaves this browser. Approve your own proofs in the <a class="link" href="admin.html">back office</a>.</p>' : '') +
@@ -111,7 +119,7 @@
       return '<button class="sq ' + cls + '" ' + (open ? 'data-act="open-submit" data-kind="bingo" data-id="' + sq.id + '"' : 'disabled') + '>' +
         (sub && sub.status !== 'rejected' ? '<img alt="" data-photo="' + esc(sub.id) + '">' : '') + '<span>' + esc(sq.text) + '</span></button>';
     }).join('');
-    return '<section><div class="team-head" style="--team:' + team.color + '"><label class="badge edit' + (team.avatar ? ' has' : '') + '"' +
+    return '<section>' + outboxBanner() + '<div class="team-head" style="--team:' + team.color + '"><label class="badge edit' + (team.avatar ? ' has' : '') + '"' +
       (team.avatar ? ' style="background-image:url(' + team.avatar + ')"' : '') + ' title="Change team photo">' +
       (team.avatar ? '' : initial(team)) + '<input id="team-photo" type="file" accept="image/*"></label>' +
       '<div><h2>' + esc(Store.displayName(team)) + '</h2><p class="fine">' + esc(team.room) + ' · ' + team.members.map(function (n) {
@@ -336,6 +344,7 @@
     'team-info': function (el) { sheetTeam(el.getAttribute('data-id')); },
     'close-sheet': closeSheet,
     'sample-photo': function () { setPhoto(samplePhoto()); },
+    'send-now': function (el) { el.disabled = true; el.textContent = 'Trying…'; Store.sendNow(); },
     'send-submit': function () {
       var value = '';
       if (draft.race) {
@@ -344,12 +353,8 @@
       }
       if (!draft.thumb) { $('#sub-error').textContent = 'Add a photo as proof first.'; return; }
       var d = draft; closeSheet();
-      if (d.blob) toast('<b>Sending…</b> uploading your photo.', 'wave');
-      Store.uploadPhoto(d.blob, d.thumb).then(function (photo) {
-        return Store.submit(d.kind, d.refId, value, photo);
-      }).then(function (ok) {
-        if (ok) toast('<b>Sent!</b> The jury is having a look.', 'wave');
-      });
+      // saved on the phone first, then sent: bad signal can delay a proof but never lose it
+      Store.submit(d.kind, d.refId, value, d.thumb);
     },
     'cast-vote': function (el) {
       var t = Store.team(el.getAttribute('data-id'));
@@ -388,7 +393,7 @@
     if (e.target.id === 'sub-value') $('#sub-error').textContent = '';
   });
   document.addEventListener('change', function (e) {
-    if (e.target.id === 'sub-photo' && e.target.files[0]) shrink(e.target.files[0], Store.demo ? 640 : 1280, setPhoto);
+    if (e.target.id === 'sub-photo' && e.target.files[0]) shrink(e.target.files[0], Store.demo ? 640 : 1080, setPhoto);
     if (e.target.id === 'team-photo' && e.target.files[0]) shrink(e.target.files[0], 256, function (d, blob) {
       if (!d) return;
       Store.uploadPhoto(blob, d).then(function (photo) {
@@ -402,6 +407,8 @@
   Store.on(function (evt) {
     if (evt.type === 'approved') toast('<b>' + (evt.points ? '+' + evt.points + ' points!' : 'Approved!') + '</b> ' + esc(evt.label), 'celebrate');
     if (evt.type === 'rejected') toast('<b>Not this time.</b> ' + esc(evt.label) + (evt.note ? ': ' + esc(evt.note) : '') + '. You can try again.', 'idle');
+    if (evt.type === 'sent') toast('<b>Sent!</b> ' + (evt.late ? esc(evt.label) + ' finally went through. ' : '') + 'The jury is having a look.', 'wave');
+    if (evt.type === 'queued') toast('<b>No signal?</b> No worries, your proof is saved on your phone and will send by itself.', 'idle');
     if (evt.type === 'error') toast('<b>Oops.</b> ' + esc(evt.message), 'idle');
     if (evt.type === 'me' && !Store.me()) { resetJoin(); if (!sheetEl.hidden) { sheetEl.hidden = true; sheetEl.innerHTML = ''; draft = null; } }
     if (sheetEl.hidden) render();

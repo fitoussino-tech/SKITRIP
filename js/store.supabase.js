@@ -75,8 +75,7 @@
       submissions: function () {
         return db.from('submissions').select('id, team_id, kind, ref_id, value, status, by, note, created_at').order('created_at')
           .then(data).then(function (rows) {
-            var sending = st.submissions.filter(function (s) { return s.sending; });   // proofs still on their way
-            return { submissions: rows.map(mapSub).concat(sending) };
+            return { submissions: rows.map(mapSub) };        // proofs still on this phone are added back by the Store's outbox
           });
       },
       ballots: function () {

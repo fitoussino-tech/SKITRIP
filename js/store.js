@@ -142,19 +142,157 @@
     });
   }
 
+  // ---------- outbox: proofs waiting to be sent ----------
+  // A proof is saved on the phone first (IndexedDB), then sent. With bad signal it simply waits
+  // there and is retried until it goes through, even if the app is closed and reopened later.
+  // submit_proof() is safe to call twice for the same square or challenge, so a retry after a
+  // reply that got lost on the way back never creates a duplicate.
+  var OUTBOX_KEY = 'mim28-outbox-v1';
+  var outbox = [];          // { id, teamId, kind, refId, value, by, at, photo (data URL), url, tries, waiting }
+  var Box = (function () {
+    var dbp = null;
+    function open() {
+      if (!dbp) dbp = new Promise(function (res, rej) {
+        if (!window.indexedDB) { rej(new Error('no IndexedDB')); return; }
+        var r = indexedDB.open('mim28', 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore('outbox', { keyPath: 'id' }); };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = function () { rej(r.error); };
+        r.onblocked = function () { rej(new Error('IndexedDB blocked')); };
+      });
+      return dbp;
+    }
+    function tx(mode, fn) {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction('outbox', mode), req = fn(t.objectStore('outbox'));
+          t.oncomplete = function () { res(req && req.result); };
+          t.onerror = t.onabort = function () { rej(t.error); };
+        });
+      });
+    }
+    // fallback when IndexedDB is not there (very old phones, some private modes): localStorage
+    function ls() { return readJSON(OUTBOX_KEY) || []; }
+    function keep(item) { var o = {}; for (var k in item) if (k !== 'waiting') o[k] = item[k]; return o; }
+    return {
+      all: function () { return tx('readonly', function (st) { return st.getAll(); }).catch(function () { return ls(); }); },
+      put: function (item) {
+        return tx('readwrite', function (st) { return st.put(keep(item)); }).catch(function () {
+          writeJSON(OUTBOX_KEY, ls().filter(function (x) { return x.id !== item.id; }).concat([keep(item)]));
+        });
+      },
+      del: function (id) {
+        return tx('readwrite', function (st) { return st['delete'](id); }).catch(function () {
+          writeJSON(OUTBOX_KEY, ls().filter(function (x) { return x.id !== id; }));
+        });
+      },
+      clear: function () { writeJSON(OUTBOX_KEY, null); return tx('readwrite', function (st) { return st.clear(); }).catch(function () {}); }
+    };
+  })();
+  function asSub(it) {
+    return { id: it.id, teamId: it.teamId, kind: it.kind, refId: it.refId, value: it.value, status: 'pending', by: it.by,
+      note: null, at: it.at, sending: true, waiting: !!it.waiting };
+  }
+  // proofs still on this phone are shown as "sending" on top of what the database knows
+  function withOutbox() {
+    var have = {};
+    state.submissions.forEach(function (x) { have[x.id] = x; });
+    outbox.forEach(function (it) {
+      photos[it.id] = it.photo;
+      if (have[it.id]) have[it.id].waiting = !!it.waiting;
+      else state.submissions.push(asSub(it));
+    });
+  }
+  function dropSub(id) { state.submissions = state.submissions.filter(function (x) { return x.id !== id; }); }
+  // no signal, a timeout, a server hiccup: worth trying again. A refusal from the database is not.
+  function isNetwork(err) {
+    if (!err) return true;
+    if (err.timeout) return true;
+    var code = String(err.code || ''), status = +(err.status || err.statusCode || 0);
+    if (code === 'P0001' || /^(22|23|42)/.test(code)) return false;
+    if (status >= 400 && status < 500 && status !== 408 && status !== 429) return false;
+    return true;
+  }
+  function timeout(promise, ms) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { var e = new Error('No answer in time'); e.timeout = true; rej(e); }, ms);
+      promise.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+  function toBlob(dataUrl) {
+    try {
+      var parts = dataUrl.split(','), bin = atob(parts[1]), n = bin.length, u8 = new Uint8Array(n);
+      while (n--) u8[n] = bin.charCodeAt(n);
+      return new Blob([u8], { type: 'image/jpeg' });
+    } catch (e) { return null; }
+  }
+  var flushing = false, retryTimer = null, saidWaiting = false;
+  function retryLater(tries) {
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(sendOutbox, Math.min(60000, 4000 * Math.pow(2, Math.min(tries, 4))));   // 8s, 16s, 32s, then every minute
+  }
+  function sendOutbox() {
+    if (flushing || !outbox.length || !backend || !state.ready) return;
+    flushing = true; clearTimeout(retryTimer);
+    var item = outbox[0];
+    var step = item.url || !backend.uploadPhoto
+      ? Promise.resolve(item.url || item.photo)
+      : timeout(backend.uploadPhoto(toBlob(item.photo), item.teamId), 90000).then(function (url) {
+          item.url = url || 'inline'; Box.put(item); return url || item.photo;
+        }, function (err) {
+          if (isNetwork(err)) throw err;
+          item.url = 'inline'; Box.put(item); return item.photo;          // no storage bucket: keep the photo in the database
+        });
+    step.then(function (photo) {
+      if (photo === 'inline') photo = item.photo;
+      var row = asSub(item);
+      return timeout(backend.submit(row, photo), 60000).then(function (saved) {
+        outbox = outbox.filter(function (x) { return x.id !== item.id; });
+        Box.del(item.id);
+        if (saved && saved.id) photos[saved.id] = photo;
+        dropSub(item.id);
+        flushing = false;
+        emit({ type: 'sent', label: achievement(item), late: item.tries > 0 });
+        if (!outbox.some(function (x) { return x.waiting; })) saidWaiting = false;
+        sendOutbox();
+      });
+    }).catch(function (err) {
+      flushing = false;
+      if (isNetwork(err)) {
+        item.tries = (item.tries || 0) + 1; item.waiting = true; Box.put(item);
+        withOutbox(); emit({ type: 'submissions' });
+        if (!saidWaiting) { saidWaiting = true; emit({ type: 'queued' }); }
+        retryLater(item.tries);
+      } else {                                                        // the database said no: tell them, let them try again
+        outbox = outbox.filter(function (x) { return x.id !== item.id; });
+        Box.del(item.id); dropSub(item.id);
+        fail('Your proof could not be sent')(err);
+        emit({ type: 'submissions' });
+        sendOutbox();
+      }
+    });
+  }
+  // signal is back, or the app comes back on screen: try straight away
+  window.addEventListener('online', function () { sendOutbox(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) sendOutbox(); });
+
   // ---------- what a back end gets to work with ----------
   var ctx = {
     state: state,
     // replace parts of the state, then tell the screens
     set: function (patch, type) {
       for (var k in patch) state[k] = patch[k];
-      if (patch.submissions) watchMine();
+      if (patch.submissions) { withOutbox(); watchMine(); }
+      if (patch.ready) setTimeout(sendOutbox, 0);
       emit({ type: type || 'data' });
     },
     emit: emit,
     photos: photos,
     // the organisers restarted the game: this phone signs itself out
-    signOutLocal: function () { state.me = null; seen = null; writeJSON(ME_KEY, null); }
+    signOutLocal: function () {          // proofs of the old game must not land in the new one
+      state.me = null; seen = null; writeJSON(ME_KEY, null);
+      outbox.forEach(function (it) { dropSub(it.id); }); outbox = []; Box.clear();
+    }
   };
 
   // ---------- proof photos, fetched only when a screen shows them ----------
@@ -269,19 +407,18 @@
       return backend.uploadPhoto(blob, state.me ? state.me.teamId : 'anon').then(function (url) { return url || inline || null; },
         function (e) { console.warn('[store] photo upload failed, keeping the inline image', e && e.message); return inline || null; });
     },
+    // Save the proof on this phone, show it straight away, and send it as soon as there is signal.
+    // photo: the shrunk JPEG as a data URL. Resolves once it is safely stored on the phone.
     submit: function (kind, refId, value, photo) {
-      var tmp = { id: 'tmp-' + Date.now(), teamId: state.me.teamId, kind: kind, refId: refId, value: value || null,
-        status: 'pending', by: state.me.name, note: null, at: new Date().toISOString(), sending: true };
-      photos[tmp.id] = photo;
-      state.submissions.push(tmp); emit({ type: 'submissions' });               // show it straight away
-      return backend.submit(tmp, photo).then(function (saved) {
-        if (saved && saved.id) photos[saved.id] = photo;
-        return true;
-      }, function (err) {
-        state.submissions = state.submissions.filter(function (s) { return s.id !== tmp.id; });
-        return fail('Your proof could not be sent')(err);
-      });
+      var item = { id: 'tmp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), teamId: state.me.teamId, kind: kind,
+        refId: refId, value: value || null, by: state.me.name, at: new Date().toISOString(), photo: photo, url: null, tries: 0 };
+      outbox.push(item);
+      withOutbox(); emit({ type: 'submissions' });
+      return Box.put(item).then(function () { sendOutbox(); return true; });
     },
+    // proofs on this phone that are still waiting to go out
+    outbox: function () { return { count: outbox.length, waiting: outbox.some(function (x) { return x.waiting; }) }; },
+    sendNow: function () { sendOutbox(); },
     // approved proofs with their photo, newest first (the feed, and a team's profile)
     posts: function (teamId) {
       return state.submissions.filter(function (s) { return s.status === 'approved' && team(s.teamId) && (!teamId || s.teamId === teamId); })
@@ -407,6 +544,12 @@
   backend = window.SupabaseBackend ? window.SupabaseBackend(ctx) : LocalBackend(ctx);
   window.Store.demo = !window.SupabaseBackend;
   backend.init();
+  Box.all().then(function (items) {
+    outbox = (items || []).filter(function (it) { return it && it.id && it.photo; })
+      .sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); });
+    if (!outbox.length) return;
+    withOutbox(); emit({ type: 'submissions' }); sendOutbox();
+  });
   if (state.me) backend.seen(state.me.teamId, state.me.name).catch(function () {});
 
   // =====================================================================
@@ -443,8 +586,10 @@
     }
     function read() { var d = readJSON(KEY); return d && d.settings ? d : null; }
     function persist() {
-      var d = { photos: ctx.photos };
-      keys.forEach(function (k) { d[k] = st[k]; });
+      var d = { photos: {} };
+      for (var ph in ctx.photos) d.photos[ph] = ctx.photos[ph];
+      keys.forEach(function (k) { d[k] = k === 'submissions' ? st[k].filter(function (x) { return !x.sending; }) : st[k]; });
+      for (var id in d.photos) if (id.indexOf('tmp-') === 0) delete d.photos[id];
       try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* storage full or private mode: keep going in memory */ }
     }
     function adopt(d) {
@@ -483,7 +628,12 @@
       },
       submit: function (tmp, photo) {
         var s = byId(st.submissions, tmp.id), tmpId = tmp.id;       // `s` is the temporary row itself
-        s.id = uid('s'); delete s.sending;
+        if (!s) { s = clone(tmp); st.submissions.push(s); }
+        if (st.submissions.some(function (x) { return !x.sending && x.teamId === s.teamId && x.kind === s.kind && x.refId === s.refId && x.status !== 'rejected'; })) {
+          st.submissions = st.submissions.filter(function (x) { return x !== s; });       // already there: same as submit_proof()
+          return Promise.resolve(null);
+        }
+        s.id = uid('s'); delete s.sending; delete s.waiting;
         delete ctx.photos[tmpId]; ctx.photos[s.id] = photo;
         commit('submissions');
         return Promise.resolve(s);
