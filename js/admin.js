@@ -42,6 +42,7 @@
     return Math.round(m / 1440) + ' d ago';
   }
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  var SWIPE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="15" rx="2.5"/><path d="M3 8v8M21 8v8"/><path d="M9 21h6"/></svg>';
   function teamChip(t) {
     var face = t.avatar ? '<span class="face" style="background-image:url(' + t.avatar + ')"></span>'
       : '<span class="face" style="background:' + t.color + '">' + esc((Store.displayName(t)[0] || '?').toUpperCase()) + '</span>';
@@ -126,6 +127,7 @@
 
     return '<h1>Overview</h1><div class="tiles">' + tiles + '</div>' +
       '<section class="box"><h2>Needs you</h2>' +
+      (pending ? '<button class="btn swipe-go" data-act="swipe-all">' + SWIPE + 'Swipe through ' + plural(pending, 'proof') + '</button>' : '') +
       (waiting || races ? '<ul class="rows">' + waiting + races + '</ul>' : '<p class="fine">Nothing is waiting. 🎉</p>') + '</section>' +
       '<section class="box"><h2>Who is in <span>highlighted = has opened the app and picked their name</span></h2><ul class="who">' + who + '</ul>' +
       (empty.length ? '<p class="fine">No one yet from: ' + empty.map(function (t) { return esc(t.room); }).join(', ') + '.</p>' : '') + '</section>';
@@ -174,7 +176,9 @@
     } else {
       body = list.map(proofCard).join('');
     }
-    return '<h1>Proofs</h1><div class="filters"><div class="segs">' + seg + '</div>' +
+    var go = f.status === 'pending' && list.length
+      ? '<button class="btn swipe-go" data-act="swipe">' + SWIPE + 'Swipe through ' + plural(list.length, 'proof') + '</button>' : '';
+    return '<h1>Proofs</h1>' + go + '<div class="filters"><div class="segs">' + seg + '</div>' +
       '<select id="f-team" class="field" data-change="f-team" aria-label="Team">' + teamOptions(f.teamId, 'All teams') + '</select>' +
       '<select id="f-ref" class="field" data-change="f-ref" aria-label="Challenge">' + refs + '</select></div>' + body;
   }
@@ -373,6 +377,8 @@
     'status': function (el) { ui.proofs.status = el.getAttribute('data-status'); ui.rejecting = null; render(); },
     'review-team': function (el) { ui.proofs = { status: 'pending', teamId: el.getAttribute('data-id'), ref: '' }; location.hash = 'proofs'; render(); },
     'award-team': function (el) { ui.prefill = { 'aw-team': el.getAttribute('data-id') }; location.hash = 'points'; render(); var f = $('#aw-label'); if (f) f.focus(); },
+    'swipe': function () { Review.open(ui.proofs); },
+    'swipe-all': function () { Review.open({}); },
     'zoom': function (el) {
       Store.loadPhoto(el.getAttribute('data-id')).then(function (url) {
         if (!url) return;
@@ -463,8 +469,10 @@
 
   Store.on(function (evt) {
     if (evt.type === 'error') { flash(evt.message); return; }
+    Review.sync();
     if (evt.type === 'approved' || evt.type === 'rejected') return;      // player toasts, not for this page
     render();
   });
+  Review.init({ teamChip: teamChip, ago: ago, plural: plural, onClose: function () { render(); } });
   render();
 })();

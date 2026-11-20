@@ -52,6 +52,7 @@ There is no build step: plain HTML, CSS and JavaScript.
 | `js/store.supabase.js` | The Supabase back end: loads, writes and listens for live changes |
 | `js/app.js` | Player screens |
 | `js/admin.js` | Back office screens |
+| `js/review.js` | Swipe review in the back office: one proof at a time, swipe right to approve, left to reject with a reason, down for later (keys → ← ↓, Z to undo) |
 | `js/mascot.js` | The salamander |
 | `js/mountain.js` | The Mountain tab: the panorama climb. The whole player app is coloured by the time of day: morning 06–11, bluebird day 11–16, golden hour 16–19, neon night 19–06 (add `?time=morning`, `day`, `golden` or `night` to the address to preview one; palettes at the end of `css/style.css`) |
 | `supabase/schema.sql`, `schema_v2.sql`, `schema_v3.sql` | Database scripts, to run once each, in order |
