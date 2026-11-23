@@ -20,7 +20,8 @@
   }
   // #room/t3 -> 't3' (another room's page)
   function roomId() { var m = /^#room\/([A-Za-z0-9_-]+)$/.exec(location.hash); return m && Store.team(m[1]) ? m[1] : null; }
-  var roomBack = '#feed';                                        // where "Back" goes from a room's page
+  var roomBack = '#feed';
+  var pokes = [];                                                // taps on the salamander (easter egg)                                        // where "Back" goes from a room's page
   function dayLabel(key) { var d = SEED.days.filter(function (x) { return x[0] === key; })[0]; return d ? d[1] : key; }
   function chip(sub) {
     if (!sub) return '';
@@ -426,7 +427,13 @@
       pickedColor = el.getAttribute('data-color');
       Array.prototype.forEach.call(document.querySelectorAll('.swatch'), function (s) { s.classList.toggle('on', s === el); });
     },
-    'poke': function (el) { Mascot.play($('.mascot', el), 'dance', 2200); },
+    // poke the salamander: it dances. Poke it 5 times quickly and the secret game opens.
+    'poke': function (el) {
+      var now = Date.now();
+      pokes = pokes.filter(function (t) { return now - t < 2500; }); pokes.push(now);
+      if (pokes.length >= 5) { pokes = []; Slalom.open(); return; }
+      Mascot.play($('.mascot', el), pokes.length >= 3 ? 'celebrate' : 'dance', 2200);
+    },
     'sign-out': function () { resetJoin(); Store.signOut(); },
     'restart': function () {
       openSheet('<h3>Restart the demo?</h3><p>Points, proofs, votes and team names go back to the start, and you choose your room again.</p>' +

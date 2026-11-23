@@ -55,6 +55,7 @@ There is no build step: plain HTML, CSS and JavaScript.
 | `js/review.js` | Swipe review in the back office: one proof at a time, swipe right to approve, left to reject with a reason, down for later (keys → ← ↓, Z to undo) |
 | `js/mascot.js` | The salamander |
 | `js/mountain.js` | The Mountain tab: the panorama climb. The whole player app is coloured by the time of day: morning 06–11, bluebird day 11–16, golden hour 16–19, neon night 19–06 (add `?time=morning`, `day`, `golden` or `night` to the address to preview one; palettes at the end of `css/style.css`) |
+| `js/slalom.js` | Easter egg: tap the salamander on Today 5 times quickly to open *Salamander Slalom*, a mini game in the spirit of Chrome's dinosaur (jump with tap/space, tuck with swipe down/↓; best score kept on the phone) |
 | `supabase/schema.sql`, `schema_v2.sql`, `schema_v3.sql` | Database scripts, to run once each, in order |
 | `docs/SUPABASE_SETUP.md` | Step-by-step Supabase setup, including organiser accounts |
 
