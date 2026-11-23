@@ -289,8 +289,19 @@
         return db.from('settings').upsert({ key: key, value: value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
           .then(data).then(function () { return refresh(['settings']); });
       },
+      // Salamander Slalom leaderboard (table slalom_scores, schema_v4_slalom.sql)
+      slalomTop: function () {
+        return db.from('slalom_scores').select('team_id,name,best,updated_at').then(data).then(function (rows) {
+          return rows.map(function (r) { return { teamId: r.team_id, name: r.name, best: r.best, at: r.updated_at }; });
+        });
+      },
+      slalomSave: function (teamId, name, score) {
+        return db.rpc('submit_slalom', { p_team: teamId, p_name: name, p_score: score }).then(data);
+      },
       restart: function () {
-        return db.rpc('reset_game').then(data).then(function () { return refresh(tables); });
+        return db.rpc('reset_game').then(data)
+          .then(function () { return db.rpc('reset_slalom').then(function () {}, function () {}); })   // empty the game's leaderboard too
+          .then(function () { return refresh(tables); });
       }
     };
   };

@@ -639,9 +639,36 @@ body[data-time="golden"] .join .hint .link { color: #2B1734; }
 .room .sq.approved span { padding: 2px 4px; border-radius: 6px; background: rgba(14, 21, 48, .72); color: #fff; }
 
 /* ---------- Easter egg: Salamander Slalom (js/slalom.js) ---------- */
-#slalom { position: fixed; inset: 0; z-index: 50; background: var(--scene); touch-action: none; user-select: none; -webkit-user-select: none; }
+#slalom { position: fixed; inset: 0; z-index: 50; background: var(--scene); touch-action: none; user-select: none; -webkit-user-select: none; outline: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 #slalom[hidden] { display: none; }
 #slalom canvas { display: block; width: 100%; height: 100%; }
 .sl-close { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 50%;
   border: 2px solid var(--card-line); background: var(--card-bg); color: var(--text); font-size: 26px; line-height: 1; }
-.sl-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.sl-hud { position: absolute; top: calc(22px + env(safe-area-inset-top)); right: 68px; font: 400 18px/1 var(--display); letter-spacing: 1px;
+  color: var(--text); font-variant-numeric: tabular-nums; white-space: pre; text-shadow: var(--heading-fx); }
+.sl-panel { position: absolute; left: 50%; top: calc(74px + env(safe-area-inset-top)); transform: translateX(-50%); width: min(360px, calc(100% - 28px));
+  max-height: calc(100% - 300px); overflow-y: auto; padding: 16px 16px 12px; text-align: center; color: var(--text);
+  background: var(--card-bg); border: var(--card-w) solid var(--card-line); border-radius: var(--radius); box-shadow: 0 12px 30px rgba(0, 0, 0, .25);
+  animation: sl-in .2s ease-out; touch-action: pan-y; }
+.sl-panel[hidden] { display: none; }
+@keyframes sl-in { from { opacity: 0; translate: 0 10px; } }
+.sl-panel h2 { margin: 0 0 4px; font-size: 26px; }
+.sl-panel h3 { margin: 16px 0 6px; font: 400 17px var(--display); text-align: left; color: var(--muted); }
+.sl-how { margin: 0 0 12px; font-size: 14px; color: var(--soft); }
+.sl-score { margin: 0; font: 400 44px/1.1 var(--display); color: var(--accent-ink); }
+.sl-panel .btn { font-size: 20px; padding: 10px 16px; }
+.sl-board { list-style: none; margin: 0; padding: 0; text-align: left; }
+.sl-board li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px dashed var(--divider); }
+.sl-board li:last-child { border-bottom: 0; }
+.sl-board li.me { background: var(--surface-2); border-radius: 10px; }
+.sl-board li.gap { margin-top: 6px; border-top: 2px dotted var(--divider); }
+.sl-rank { flex: 0 0 28px; text-align: center; font: 400 17px var(--display); color: var(--muted); }
+.sl-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.sl-who b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-who b i { font: 700 10px var(--app-font); font-style: normal; text-transform: uppercase; padding: 1px 6px; border-radius: 99px; background: var(--accent); color: var(--accent-text); vertical-align: 2px; }
+.sl-who small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-m { font: 400 18px var(--display); color: var(--accent-ink); white-space: nowrap; }
+.sl-empty { margin: 4px 0; font-size: 14px; color: var(--muted); }
+/* quick taps on the salamander must not zoom the page on iPhone */
+.mascot-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }

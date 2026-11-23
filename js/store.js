@@ -292,6 +292,7 @@
     signOutLocal: function () {          // proofs of the old game must not land in the new one
       state.me = null; seen = null; writeJSON(ME_KEY, null);
       outbox.forEach(function (it) { dropSub(it.id); }); outbox = []; Box.clear();
+      try { localStorage.removeItem('mim28-slalom-best'); } catch (e) {}   // the game's best run belongs to the old game too
     }
   };
 
@@ -416,6 +417,18 @@
       outbox.push(item);
       withOutbox(); emit({ type: 'submissions' });
       return Box.put(item).then(function () { sendOutbox(); return true; });
+    },
+    // ---------- Salamander Slalom (the easter egg game) ----------
+    // Leaderboard, best first: [{ teamId, name, best }]. Resolves to null when it cannot be read (no signal).
+    slalomTop: function () {
+      return backend.slalomTop().then(function (rows) {
+        return rows.sort(function (a, b) { return b.best - a.best || String(a.at).localeCompare(String(b.at)); });
+      }).catch(function () { return null; });
+    },
+    // Save a finished run for the signed-in player. Resolves to their best (or null if it could not be sent).
+    slalomSave: function (score) {
+      if (!state.me) return Promise.resolve(null);
+      return backend.slalomSave(state.me.teamId, state.me.name, Math.max(0, Math.floor(score))).catch(function () { return null; });
     },
     // proofs on this phone that are still waiting to go out
     outbox: function () { return { count: outbox.length, waiting: outbox.some(function (x) { return x.waiting; }) }; },
@@ -558,7 +571,7 @@
   // shared between the player app and the back office when both are open.
   // =====================================================================
   function LocalBackend(ctx) {
-    var KEY = 'mim28-demo-v2', VOTER = 'this-device';
+    var KEY = 'mim28-demo-v2', VOTER = 'this-device', SLALOM_KEY = 'mim28-demo-slalom';
     var keys = ['teams', 'ledger', 'submissions', 'ballots', 'events', 'challenges', 'players', 'settings'];
     var uid = function (p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
     var now = function () { return new Date().toISOString(); };
@@ -689,7 +702,28 @@
       },
       deleteEvent: function (id) { st.events = st.events.filter(function (e) { return e.id !== id; }); return commit('events'); },
       setSetting: function (key, value) { st.settings[key] = value; return commit('settings'); },
+      slalomTop: function () {
+        var rows = readJSON(SLALOM_KEY);
+        if (!rows) {                                                          // demo: a few made-up runs from the seed rooms
+          rows = [];
+          SEED.teams.slice(0, 6).forEach(function (t, i) {
+            if (t.members && t.members[0]) rows.push({ teamId: t.id, name: t.members[0], best: [1240, 980, 760, 610, 455, 320][i], at: '2027-01-01T00:00:0' + i + 'Z' });
+          });
+          writeJSON(SLALOM_KEY, rows);
+        }
+        return Promise.resolve(rows.slice());
+      },
+      slalomSave: function (teamId, name, score) {
+        return this.slalomTop().then(function (rows) {
+          var mine = rows.filter(function (r) { return r.teamId === teamId && r.name === name; })[0];
+          if (!mine) { mine = { teamId: teamId, name: name, best: score, at: new Date().toISOString() }; rows.push(mine); }
+          else if (score > mine.best) { mine.best = score; mine.at = new Date().toISOString(); }
+          writeJSON(SLALOM_KEY, rows);
+          return mine.best;
+        });
+      },
       restart: function () {
+        writeJSON(SLALOM_KEY, []);
         var d = fresh();
         d.events = st.events; d.challenges = st.challenges;                 // content is kept, like on the real site
         d.settings = { today: st.settings.today, message: st.settings.message, epoch: (st.settings.epoch || 1) + 1 };
