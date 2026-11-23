@@ -230,6 +230,7 @@
     if (!p.onGround) cx.rotate(Math.max(-0.35, Math.min(0.35, p.vy / (2600 * u))));
     if (g.state === 'over') cx.rotate(0.9);
     if (pal.night) { cx.shadowColor = '#3DF5FF'; cx.shadowBlur = 12; }
+    cx.scale(-1, 1);                                     // the mascot drawing faces left: mirror it so it skis forward
     if (sprite && sprite.complete && sprite.naturalWidth) cx.drawImage(sprite, -p.w / 2, -h / 2, p.w, h);
     else { cx.fillStyle = '#3DBE6B'; cx.fillRect(-p.w / 4, -h / 2, p.w / 2, h); }
     cx.restore();
