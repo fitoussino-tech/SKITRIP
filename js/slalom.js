@@ -11,6 +11,7 @@
   var BEST_KEY = 'mim28-slalom-best';
   var STEP = 1 / 120, VH = 640, GROUND = 512, M = 28;      // M: world units per metre
   var PW = 104, PH = 85;                                    // the salamander, in world units
+  var START_SPEED = 430, TOP_SPEED = 860;                   // world units per second (it speeds up by 9 every second)
   var el, cv, cx, panel, hud, W, H, VW, u, dpr, oy = 0;
   // How much piste you see ahead decides how fair it is. A phone held upright is narrow, so
   // the world is scaled to show at least MIN_VIEW units across (and at most MAX_VIEW on a
@@ -132,7 +133,7 @@
   // ---------- the run ----------
   function newRun() {
     g = {
-      state: 'ready', t: 0, dist: 0, prev: 0, speed: 330, score: 0, best: best(), newBest: false,
+      state: 'ready', t: 0, dist: 0, prev: 0, speed: START_SPEED, score: 0, best: best(), newBest: false,
       p: { x: Math.min(110, VW * 0.14), y: 0, prevY: 0, vy: 0, onGround: true, tuck: false, holding: false, buffer: 0 },
       obs: [], nextAt: 700, flakes: [], shake: 0, mark: 0, flash: 0, sprays: []
     };
@@ -182,7 +183,7 @@
     g.sprays.forEach(function (s) { s.t += dt; s.x -= (g.speed * 0.6 + 60) * dt; s.y -= 30 * dt; });
     g.sprays = g.sprays.filter(function (s) { return s.t < 0.35; });
     if (g.state !== 'run') return;
-    g.speed = Math.min(860, g.speed + 9 * dt);
+    g.speed = Math.min(TOP_SPEED, g.speed + 9 * dt);
     g.dist += g.speed * dt;
     g.score = Math.floor(g.dist / M);
     if (Math.floor(g.score / 500) > g.mark) { g.mark = Math.floor(g.score / 500); g.flash = 1.1; }   // blink every 500 m
